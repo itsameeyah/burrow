@@ -6,6 +6,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.meeyah.burrow.config.BurrowConfig;
 import dev.meeyah.burrow.dev.DevIdentity;
+import dev.meeyah.burrow.session.HostSession;
+import dev.meeyah.burrow.session.JoinFlow;
 import dev.meeyah.burrow.state.FriendsState;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
@@ -152,7 +154,16 @@ public final class BurrowConnection {
             case Protocol.OP_PRESENCE_BATCH -> state.applyPresence(parsePresence(array(msg, "updates")));
             case Protocol.OP_SESSION_STATE -> LOG.debug("session state: {}", msg);
             case Protocol.OP_INVITE_RECEIVED -> LOG.info("invite received: {}", msg);
-            case Protocol.OP_JOIN_READY -> LOG.info("join ready: {}", msg);
+            case Protocol.OP_JOIN_READY -> JoinFlow.onJoinReady(
+                    uuid(msg, "host"),
+                    str(msg, "worldName"),
+                    str(msg, "roomId"),
+                    str(msg, "token"),
+                    str(msg, "relayPath"));
+            case Protocol.OP_RELAY_HOST -> HostSession.onRelayHost(
+                    str(msg, "roomId"),
+                    str(msg, "token"),
+                    str(msg, "relayPath"));
             case Protocol.OP_ERROR -> LOG.warn("server error: {}",
                     msg.has("message") ? msg.get("message").getAsString() : msg);
             default -> LOG.debug("unknown op: {}", op);
@@ -245,5 +256,17 @@ public final class BurrowConnection {
 
     public void removeFriend(UUID friendId) {
         send(Protocol.friendRemove(friendId));
+    }
+
+    public void joinBegin(UUID hostId) {
+        send(Protocol.joinBegin(hostId));
+    }
+
+    public void sessionOpen(String worldName, String gameVersion, int maxPlayers) {
+        send(Protocol.sessionOpen(worldName, gameVersion, "none", maxPlayers));
+    }
+
+    public void sessionClose() {
+        send(Protocol.sessionClose());
     }
 }

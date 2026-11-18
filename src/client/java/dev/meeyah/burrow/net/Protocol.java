@@ -31,6 +31,7 @@ public final class Protocol {
     public static final String OP_SESSION_STATE = "session.state";
     public static final String OP_INVITE_RECEIVED = "invite.received";
     public static final String OP_JOIN_READY = "join.ready";
+    public static final String OP_RELAY_HOST = "relay.host";
     public static final String OP_ERROR = "error";
 
     private Protocol() {}

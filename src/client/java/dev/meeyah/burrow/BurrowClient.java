@@ -41,4 +41,18 @@ public class BurrowClient implements ClientModInitializer {
     public static BurrowConnection connection() {
         return connection;
     }
+
+    /** Minecraft version string reported to the Burrow server on session open. */
+    public static String minecraftVersion() {
+        return net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getModContainer("minecraft")
+                .map(c -> c.getMetadata().getVersion().getFriendlyString())
+                .orElse("unknown");
+    }
+
+    /** Signaling URL without a trailing slash, used to derive relay URLs. */
+    public static String relayBase() {
+        String url = config == null ? "" : config.serverUrl;
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
 }

@@ -2,6 +2,8 @@ package dev.meeyah.burrow.ui;
 
 import dev.meeyah.burrow.BurrowClient;
 import dev.meeyah.burrow.net.BurrowConnection;
+import dev.meeyah.burrow.session.HostSession;
+import dev.meeyah.burrow.session.JoinFlow;
 import dev.meeyah.burrow.state.FriendsState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -102,6 +104,22 @@ public class BurrowFriendsScreen extends Screen {
                 .width(52).build());
         layout.addChild(addRow);
 
+        // ----- share this world (only while in a singleplayer world) -----
+        if (mc.getSingleplayerServer() != null) {
+            boolean hosting = HostSession.isHosting();
+            layout.addChild(Button.builder(
+                            Component.literal(hosting ? "Close world to friends" : "Open world to friends"),
+                            b -> {
+                                if (HostSession.isHosting()) {
+                                    HostSession.stop();
+                                } else {
+                                    HostSession.start();
+                                }
+                                rebuildWidgets();
+                            })
+                    .width(LIST_WIDTH).build());
+        }
+
         layout.addChild(Button.builder(Component.literal("Done"), b -> onClose())
                 .width(LIST_WIDTH).build());
 
@@ -130,7 +148,11 @@ public class BurrowFriendsScreen extends Screen {
     }
 
     private void onFriendClicked(FriendsState.Friend friend) {
-        // M2 wires this up: join the friend's hosted world when it goes live.
+        // A hosting friend is joinable through the Burrow relay; everything
+        // else on the card is informational for now.
+        if (friend.hosting() && BurrowClient.connection() != null) {
+            JoinFlow.begin(friend);
+        }
     }
 
     private void onRequestClicked(FriendsState.Request request) {
