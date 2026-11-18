@@ -1,0 +1,32 @@
+{
+	"schemaVersion": 1,
+	"id": "burrow",
+	"version": "${version}",
+	"name": "Burrow",
+	"description": "Your own friends list and world sharing — self-hosted.",
+	"authors": [
+		"meeyah"
+	],
+	"contact": {
+		"homepage": "https://meeyah.dev"
+	},
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"dev.meeyah.burrow.BurrowClient"
+		]
+	},
+	"mixins": [
+		{
+			"config": "burrow.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
