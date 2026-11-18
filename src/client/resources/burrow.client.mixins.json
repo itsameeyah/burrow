@@ -2,7 +2,10 @@
 	"required": true,
 	"package": "dev.meeyah.burrow.mixin",
 	"compatibilityLevel": "JAVA_25",
-	"client": [],
+	"client": [
+		"GuiMixin",
+		"OnlineOptionsScreenMixin"
+	],
 	"injectors": {
 		"defaultRequire": 1
 	}
