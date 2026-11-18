@@ -10,39 +10,69 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Joiner side of Burrow: click a hosting friend, ask the Burrow server for
  * a relay room, build the tunnel, then let vanilla's own connect screen do
  * everything it normally does — our mixins quietly swap the transport to
- * the tunnel while the address resolver reads a harmless 127.0.0.1.
+ * the tunnel while the resolver reads a harmless 127.0.0.1.
+ *
+ * The active join is one-shot and expires: the Connection mixin consumes it
+ * exactly once, and a join that never reaches a connect (cancelled screen)
+ * can no longer hijack the next normal server connection after the window
+ * passes.
  */
 public final class JoinFlow {
-    private static volatile @Nullable RelayTunnel active;
+    /** A join is only "active" for this long after join.ready. */
+    private static final long ACTIVE_WINDOW_MS = 60_000;
+
+    private static volatile @Nullable ActiveJoin active;
 
     private JoinFlow() {}
 
-    /** Set by our Connection mixin: non-null means the current vanilla connect should ride the tunnel. */
-    public static @Nullable RelayTunnel active() {
-        return active;
+    /** Non-consuming peek: is there a live, unexpired, unused tunnel? */
+    public static @Nullable RelayTunnel peekActive() {
+        ActiveJoin join = active;
+        return join != null && !join.consumed.get() && !join.expired() ? join.tunnel : null;
+    }
+
+    /** Consuming take, used by the Connection mixin exactly once per join. */
+    public static @Nullable RelayTunnel consumeActive() {
+        ActiveJoin join = active;
+        if (join == null || join.consumed.getAndSet(true) || join.expired()) {
+            return null;
+        }
+        return join.tunnel;
     }
 
     public static void begin(FriendsState.Friend host) {
-        BurrowConnectionHelper.begin(host.uuid());
+        if (BurrowClient.connection() != null) {
+            BurrowClient.connection().joinBegin(host.uuid());
+        }
     }
 
     public static void onJoinReady(UUID hostUuid, String worldName, String roomId, String token, String relayPath) {
         String hostName = lookupName(hostUuid);
         String url = HostSession.relayUrl(relayPath, roomId, token);
         Thread worker = new Thread(() -> {
-            RelayTunnel tunnel = new RelayTunnel(RelayTunnel.Mode.JOIN, url, null, JoinFlow::tunnelClosed);
+            // The close handler only clears the active slot if this join is
+            // still the current one — a newer join must never be clobbered.
+            final ActiveJoin[] slot = new ActiveJoin[1];
+            RelayTunnel tunnel = new RelayTunnel(RelayTunnel.Mode.JOIN, url, null, () -> {
+                if (active == slot[0]) {
+                    active = null;
+                }
+            });
             try {
                 tunnel.connectBlocking(10);
             } catch (InterruptedException e) {
                 tunnel.close();
                 return;
             }
-            active = tunnel;
+            ActiveJoin join = new ActiveJoin(tunnel);
+            slot[0] = join;
+            active = join;
             Minecraft mc = Minecraft.getInstance();
             mc.execute(() -> {
                 String fakeAddress = hostUuid + ".burrow";
@@ -58,10 +88,6 @@ public final class JoinFlow {
         worker.start();
     }
 
-    private static void tunnelClosed() {
-        active = null;
-    }
-
     private static String lookupName(UUID uuid) {
         for (FriendsState.Friend f : BurrowClient.friends().friends()) {
             if (uuid.equals(f.uuid())) {
@@ -71,12 +97,17 @@ public final class JoinFlow {
         return null;
     }
 
-    /** Small indirection so the connection layer can kick off a join without a circular import mess. */
-    private static final class BurrowConnectionHelper {
-        static void begin(UUID hostId) {
-            if (BurrowClient.connection() != null) {
-                BurrowClient.connection().joinBegin(hostId);
-            }
+    private static final class ActiveJoin {
+        final RelayTunnel tunnel;
+        final long createdAt = System.currentTimeMillis();
+        final AtomicBoolean consumed = new AtomicBoolean(false);
+
+        ActiveJoin(RelayTunnel tunnel) {
+            this.tunnel = tunnel;
+        }
+
+        boolean expired() {
+            return System.currentTimeMillis() - createdAt > ACTIVE_WINDOW_MS;
         }
     }
 }

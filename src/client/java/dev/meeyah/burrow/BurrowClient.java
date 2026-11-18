@@ -50,9 +50,23 @@ public class BurrowClient implements ClientModInitializer {
                 .orElse("unknown");
     }
 
-    /** Signaling URL without a trailing slash, used to derive relay URLs. */
+    /** Signaling URL: config base with exactly one /ws path. */
+    public static String signalingUrl() {
+        return relayBase() + "/ws";
+    }
+
+    /** Origin base of the Burrow server (no trailing slash, no /ws path), used to derive relay URLs. */
     public static String relayBase() {
-        String url = config == null ? "" : config.serverUrl;
-        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+        String url = config == null ? "" : config.serverUrl.trim();
+        while (url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
+        }
+        if (url.endsWith("/ws")) {
+            url = url.substring(0, url.length() - 3);
+            while (url.endsWith("/")) {
+                url = url.substring(0, url.length() - 1);
+            }
+        }
+        return url;
     }
 }

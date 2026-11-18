@@ -26,6 +26,8 @@ public final class FriendsState {
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private volatile UUID selfUuid;
     private volatile String selfName;
+    private volatile String lastError;
+    private volatile long lastErrorAt;
 
     public void addListener(Listener l) {
         listeners.add(l);
@@ -55,6 +57,22 @@ public final class FriendsState {
         this.selfUuid = uuid;
         this.selfName = name;
         fireChanged();
+    }
+
+    /** Last server error message, for surfacing in the UI for a few seconds. */
+    public void setError(String message) {
+        this.lastError = message;
+        this.lastErrorAt = System.currentTimeMillis();
+        fireChanged();
+    }
+
+    /** The most recent error if it is still fresh (5 seconds), else null. */
+    public String errorFlash() {
+        String err = this.lastError;
+        if (err == null || System.currentTimeMillis() - this.lastErrorAt > 5_000) {
+            return null;
+        }
+        return err;
     }
 
     public void replaceAll(List<Friend> newFriends, List<Request> incoming, List<Request> outgoing) {

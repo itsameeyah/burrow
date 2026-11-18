@@ -16,8 +16,9 @@ import java.net.InetAddress;
 /**
  * While a Burrow join is active, swap vanilla's remote transport for the
  * local one and steer the connect into the tunnel's local listener. The
- * vanilla pipeline (framing, compression, Mojang auth, encryption) runs
- * unchanged on top of whatever bytes the tunnel carries.
+ * join is consumed exactly once and only steers loopback-bound connects,
+ * so a cancelled or stale join can never hijack a normal server, LAN or
+ * Realms connection.
  */
 @Mixin(Connection.class)
 public abstract class ConnectionMixin {
@@ -29,7 +30,7 @@ public abstract class ConnectionMixin {
             argsOnly = true
     )
     private static EventLoopGroupHolder burrow$useLocalTransport(EventLoopGroupHolder holder) {
-        return JoinFlow.active() != null ? EventLoopGroupHolder.local() : holder;
+        return JoinFlow.peekActive() != null ? EventLoopGroupHolder.local() : holder;
     }
 
     @Redirect(
@@ -40,8 +41,10 @@ public abstract class ConnectionMixin {
             )
     )
     private static ChannelFuture burrow$connectThroughTunnel(Bootstrap bootstrap, InetAddress address, int port) {
-        RelayTunnel tunnel = JoinFlow.active();
-        if (tunnel != null) {
+        RelayTunnel tunnel = JoinFlow.consumeActive();
+        // The loopback check matches the address our resolver rewrite set;
+        // a normal internet server address would never take this branch.
+        if (tunnel != null && address.isLoopbackAddress()) {
             return bootstrap.connect(tunnel.gameSideAddress());
         }
         return bootstrap.connect(address, port);

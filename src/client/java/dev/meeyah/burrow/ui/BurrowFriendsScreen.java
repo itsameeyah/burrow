@@ -14,6 +14,7 @@ import net.minecraft.client.gui.layouts.FrameLayout;
 import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
@@ -30,12 +31,15 @@ public class BurrowFriendsScreen extends Screen {
     private static final int ROW_SPACING = 4;
     private static final int MAX_ROWS = 8;
 
+    private final @Nullable Screen parent;
     private final FriendsState.Listener listener = this::onFriendsChanged;
     private String typedName = "";
     private int page = 0;
+    private EditBox nameBox;
 
-    public BurrowFriendsScreen() {
+    public BurrowFriendsScreen(@Nullable Screen parent) {
         super(Component.literal("Burrow — Friends"));
+        this.parent = parent;
     }
 
     @Override
@@ -81,26 +85,31 @@ public class BurrowFriendsScreen extends Screen {
             layout.addChild(navRow);
         }
 
-        // ----- pending requests -----
+        // ----- pending requests (capped like the friends list) -----
         List<FriendsState.Request> requests = BurrowClient.friends().requests();
         if (!requests.isEmpty()) {
             layout.addChild(new StringWidget(LIST_WIDTH, 9,
                     Component.literal("Requests (" + requests.size() + ")"), font));
-            for (FriendsState.Request r : requests) {
+            int shownRequests = Math.min(requests.size(), MAX_ROWS);
+            for (FriendsState.Request r : requests.subList(0, shownRequests)) {
                 String label = (r.outgoing() ? "-> " : "<- ") + r.name();
                 layout.addChild(Button.builder(Component.literal(label), b -> onRequestClicked(r))
                         .width(LIST_WIDTH).build());
             }
+            if (requests.size() > shownRequests) {
+                layout.addChild(new StringWidget(LIST_WIDTH, 9,
+                        Component.literal("(+" + (requests.size() - shownRequests) + " more)"), font));
+            }
         }
 
         // ----- add friend -----
-        EditBox nameBox = new EditBox(font, 140, 18, Component.literal("Add friend"));
-        nameBox.setMaxLength(32);
-        nameBox.setHint(Component.literal("Profile name"));
-        nameBox.setValue(this.typedName);
+        this.nameBox = new EditBox(font, 140, 18, Component.literal("Add friend"));
+        this.nameBox.setMaxLength(32);
+        this.nameBox.setHint(Component.literal("Profile name"));
+        this.nameBox.setValue(this.typedName);
         LinearLayout addRow = LinearLayout.horizontal().spacing(ROW_SPACING);
-        addRow.addChild(nameBox);
-        addRow.addChild(Button.builder(Component.literal("Send"), b -> sendRequest(nameBox))
+        addRow.addChild(this.nameBox);
+        addRow.addChild(Button.builder(Component.literal("Send"), b -> sendRequest(this.nameBox))
                 .width(52).build());
         layout.addChild(addRow);
 
@@ -118,6 +127,9 @@ public class BurrowFriendsScreen extends Screen {
                                 rebuildWidgets();
                             })
                     .width(LIST_WIDTH).build());
+        } else {
+            // Left the world without closing hosting: clean up now.
+            HostSession.ensureStopped();
         }
 
         layout.addChild(Button.builder(Component.literal("Done"), b -> onClose())
@@ -125,7 +137,7 @@ public class BurrowFriendsScreen extends Screen {
 
         layout.visitWidgets(w -> addRenderableWidget(w));
         FrameLayout.alignInRectangle(layout, this.getRectangle(), 0.5F, 0.5F);
-        setInitialFocus(nameBox);
+        setInitialFocus(this.nameBox);
     }
 
     @Override
@@ -138,11 +150,28 @@ public class BurrowFriendsScreen extends Screen {
         BurrowClient.friends().removeListener(this.listener);
     }
 
+    @Override
+    public void onClose() {
+        if (this.parent != null && this.minecraft != null) {
+            this.minecraft.gui.setScreen(this.parent);
+        } else {
+            super.onClose();
+        }
+    }
+
+    /** Capture whatever is currently typed so a live rebuild can't wipe it. */
+    private void syncTypedName() {
+        if (this.nameBox != null) {
+            this.typedName = this.nameBox.getValue();
+        }
+    }
+
     private void onFriendsChanged() {
         if (this.minecraft == null || this.minecraft.gui == null) {
             return;
         }
         if (this.minecraft.gui.screen() instanceof BurrowFriendsScreen current) {
+            current.syncTypedName();
             current.rebuildWidgets();
         }
     }
@@ -172,6 +201,11 @@ public class BurrowFriendsScreen extends Screen {
     }
 
     private Component statusComponent() {
+        // Server errors surface for a few seconds right in the status line.
+        String flash = BurrowClient.friends().errorFlash();
+        if (flash != null) {
+            return Component.literal("⚠ " + flash);
+        }
         BurrowConnection connection = BurrowClient.connection();
         BurrowConnection.Status status =
                 connection == null ? BurrowConnection.Status.OFFLINE : connection.status();

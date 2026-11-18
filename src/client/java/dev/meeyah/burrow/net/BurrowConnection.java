@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.meeyah.burrow.BurrowClient;
 import dev.meeyah.burrow.config.BurrowConfig;
 import dev.meeyah.burrow.dev.DevIdentity;
 import dev.meeyah.burrow.session.HostSession;
@@ -31,6 +32,8 @@ public final class BurrowConnection {
 
     private final BurrowConfig config;
     private final FriendsState state;
+    private final java.util.concurrent.atomic.AtomicBoolean reconnectScheduled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
     private volatile WebSocketClient client;
     private volatile Status status = Status.OFFLINE;
     private volatile boolean stopped = false;
@@ -65,9 +68,10 @@ public final class BurrowConnection {
     }
 
     private void connectBlocking() {
-        WebSocketClient ws = new WebSocketClient(URI.create(config.serverUrl)) {
+        WebSocketClient ws = new WebSocketClient(URI.create(BurrowClient.signalingUrl())) {
             @Override
             public void onOpen(ServerHandshake handshake) {
+                attempts = 0;
                 JsonObject hello = Protocol.msg(Protocol.OP_HELLO);
                 if (DevIdentity.isDev()) {
                     String name = DevIdentity.username();
@@ -120,6 +124,12 @@ public final class BurrowConnection {
         if (stopped) {
             return;
         }
+        // Exactly one reconnect sleeper at a time: both the connectBlocking
+        // failure path and the socket's own onClose can land here after a
+        // failed attempt, and they must not double-schedule.
+        if (!reconnectScheduled.compareAndSet(false, true)) {
+            return;
+        }
         attempts = Math.min(attempts + 1, 6);
         long delayMillis = Math.min(1000L << attempts, 60000L);
         Thread sleeper = new Thread(() -> {
@@ -127,8 +137,10 @@ public final class BurrowConnection {
                 Thread.sleep(delayMillis);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                reconnectScheduled.set(false);
                 return;
             }
+            reconnectScheduled.set(false);
             connectAsync();
         }, "burrow-reconnect");
         sleeper.setDaemon(true);
@@ -144,6 +156,9 @@ public final class BurrowConnection {
                 state.setSelf(self, name);
                 status = Status.CONNECTED;
                 LOG.info("connected to Burrow server as {}", name);
+                // If we were hosting before a reconnect, re-announce the
+                // session so friends still see the world as live.
+                HostSession.reannounce();
             }
             case Protocol.OP_FRIENDS_SYNC -> {
                 List<FriendsState.Friend> friends = parseFriends(array(msg, "friends"));
@@ -164,8 +179,11 @@ public final class BurrowConnection {
                     str(msg, "roomId"),
                     str(msg, "token"),
                     str(msg, "relayPath"));
-            case Protocol.OP_ERROR -> LOG.warn("server error: {}",
-                    msg.has("message") ? msg.get("message").getAsString() : msg);
+            case Protocol.OP_ERROR -> {
+                String message = msg.has("message") ? msg.get("message").getAsString() : msg.toString();
+                LOG.warn("server error: {}", message);
+                state.setError(message);
+            }
             default -> LOG.debug("unknown op: {}", op);
         }
     }
@@ -196,7 +214,7 @@ public final class BurrowConnection {
                     uuid(o, "uuid"),
                     strOr(o, "name", "?"),
                     strOr(o, "presence", "offline"),
-                    o.has("hosting") && o.get("hosting").getAsBoolean(),
+                    bool(o, "hosting"),
                     str(o, "worldName")));
         }
         return out;
@@ -220,7 +238,7 @@ public final class BurrowConnection {
             out.add(new FriendsState.PresenceUpdate(
                     uuid(o, "uuid"),
                     strOr(o, "presence", "offline"),
-                    o.has("hosting") && o.get("hosting").getAsBoolean(),
+                    bool(o, "hosting"),
                     str(o, "worldName")));
         }
         return out;
@@ -229,6 +247,11 @@ public final class BurrowConnection {
     private static String strOr(JsonObject o, String member, String fallback) {
         String s = str(o, member);
         return s == null ? fallback : s;
+    }
+
+    /** Null-safe boolean field read (absent or JSON null -> false). */
+    private static boolean bool(JsonObject o, String member) {
+        return o.has(member) && o.get(member).isJsonPrimitive() && o.get(member).getAsBoolean();
     }
 
     // ----- outgoing actions (used by the UI) -----

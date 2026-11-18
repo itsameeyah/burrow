@@ -16,11 +16,11 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -37,9 +37,15 @@ import java.util.concurrent.atomic.AtomicReference;
  * JOIN mode: binds a LocalServerChannel up front; the vanilla client —
  * redirected by our Connection mixin to local transport — connects to it,
  * and both sides pump bytes into the relay.
+ *
+ * Early relay frames that arrive before the game-side channel is active
+ * are buffered (bounded) and flushed on channelActive, so the joiner's
+ * first handshake packet can never be silently dropped.
  */
 public final class RelayTunnel {
     public enum Mode { HOST, JOIN }
+
+    private static final int MAX_PENDING_FRAMES = 512;
 
     private final Mode mode;
     private final String relayUrl;
@@ -47,9 +53,11 @@ public final class RelayTunnel {
     private final Runnable onClosed;
     private final AtomicReference<Channel> gameChannel = new AtomicReference<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    /** Frames from the relay that arrived before the game-side channel was ready. */
+    private final ConcurrentLinkedQueue<byte[]> pendingFromRelay = new ConcurrentLinkedQueue<>();
     private volatile WebSocketClient webSocket;
     private volatile Channel localChannel;      // HOST: LocalChannel to server endpoint; JOIN: our LocalServerChannel
-    private volatile LocalAddress joinAddress;  // JOIN only: where vanilla connects
+    private volatile LocalAddress joinAddress;   // JOIN only: where vanilla connects
 
     public RelayTunnel(Mode mode, String relayUrl, @Nullable SocketAddress serverSideAddress, Runnable onClosed) {
         this.mode = mode;
@@ -96,11 +104,13 @@ public final class RelayTunnel {
 
             @Override
             public void onMessage(ByteBuffer bytes) {
+                byte[] data = new byte[bytes.remaining()];
+                bytes.get(data);
                 Channel game = RelayTunnel.this.gameChannel.get();
                 if (game != null && game.isActive()) {
-                    byte[] data = new byte[bytes.remaining()];
-                    bytes.get(data);
                     game.writeAndFlush(Unpooled.wrappedBuffer(data));
+                } else if (RelayTunnel.this.pendingFromRelay.size() < MAX_PENDING_FRAMES) {
+                    RelayTunnel.this.pendingFromRelay.add(data);
                 }
             }
 
@@ -132,18 +142,24 @@ public final class RelayTunnel {
         if (this.mode != Mode.HOST || this.serverSideAddress == null) {
             return;
         }
-        this.localChannel = new Bootstrap()
-                .group(EventLoopGroupHolder.local().eventLoopGroup())
-                .channel(LocalChannel.class)
-                .handler(new ChannelInitializer<Channel>() {
-                    @Override
-                    protected void initChannel(Channel ch) {
-                        ch.pipeline().addLast(new GameSideHandler(RelayTunnel.this));
-                    }
-                })
-                .connect(this.serverSideAddress)
-                .syncUninterruptibly()
-                .channel();
+        try {
+            this.localChannel = new Bootstrap()
+                    .group(EventLoopGroupHolder.local().eventLoopGroup())
+                    .channel(LocalChannel.class)
+                    .handler(new ChannelInitializer<Channel>() {
+                        @Override
+                        protected void initChannel(Channel ch) {
+                            ch.pipeline().addLast(new GameSideHandler(RelayTunnel.this));
+                        }
+                    })
+                    .connect(this.serverSideAddress)
+                    .syncUninterruptibly()
+                    .channel();
+        } catch (Throwable t) {
+            // If the local endpoint vanished (host stopped hosting mid-handshake),
+            // tear the tunnel down instead of leaking a half-open relay socket.
+            shutdown();
+        }
     }
 
     private void shutdown() {
@@ -176,6 +192,11 @@ public final class RelayTunnel {
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
             this.tunnel.gameChannel.set(ctx.channel());
+            // Flush anything the relay sent while we were still connecting.
+            byte[] frame;
+            while ((frame = this.tunnel.pendingFromRelay.poll()) != null) {
+                ctx.writeAndFlush(Unpooled.wrappedBuffer(frame));
+            }
         }
 
         @Override
@@ -184,7 +205,11 @@ public final class RelayTunnel {
             buf.readBytes(data);
             WebSocketClient ws = this.tunnel.webSocket;
             if (ws != null && ws.isOpen()) {
-                ws.send(data);
+                try {
+                    ws.send(data);
+                } catch (Throwable ignored) {
+                    this.tunnel.shutdown();
+                }
             }
         }
 

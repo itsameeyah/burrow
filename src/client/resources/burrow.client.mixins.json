@@ -6,8 +6,9 @@
 		"GuiMixin",
 		"OnlineOptionsScreenMixin",
 		"ServerConnectionListenerMixin",
-		"ConnectScreenMixin",
-		"ConnectionMixin"
+		"ServerNameResolverMixin",
+		"ConnectionMixin",
+		"ConnectionMemoryMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
