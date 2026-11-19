@@ -239,7 +239,7 @@ public class HostWorldScreen extends Screen {
         if (hosting) {
             addRenderableWidget(Button.builder(Component.literal("+ Invite"), b -> {
                 if (this.minecraft != null) {
-                    this.minecraft.gui.setScreen(new InviteFriendScreen(this));
+                    this.minecraft.setScreen(new InviteFriendScreen(this));
                 }
             }).bounds(innerX + innerW - 64, this.contentY + 6, 64, 16).build());
         }
@@ -460,7 +460,7 @@ public class HostWorldScreen extends Screen {
     @Override
     public void onClose() {
         if (this.parent != null && this.minecraft != null) {
-            this.minecraft.gui.setScreen(this.parent);
+            this.minecraft.setScreen(this.parent);
         } else {
             super.onClose();
         }
@@ -673,7 +673,7 @@ public class HostWorldScreen extends Screen {
         @Override
         public void onClose() {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(this.parent);
+                this.minecraft.setScreen(this.parent);
             }
         }
     }

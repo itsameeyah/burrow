@@ -34,7 +34,6 @@ public final class HostSession {
     private static volatile @Nullable SocketAddress localEndpoint;
     private static volatile @Nullable MinecraftServer stateServer;
     private static volatile @Nullable HostWorldState currentState;
-    private static volatile boolean wePublished;
     private static volatile boolean hosting;
     /** One tunnel per relay room (one per joining friend). */
     private static final Map<String, RelayTunnel> TUNNELS = new ConcurrentHashMap<>();
@@ -81,12 +80,10 @@ public final class HostSession {
             return;
         }
 
-        // Publish to the LAN scope so the game creates its real server
+        // Publish to LAN if needed so the game creates its real server
         // channel — and our mixin captures the initializer during the bind.
-        if (!server.isPublished()) {
-            if (server.publishServer(MinecraftServer.MultiplayerScope.LAN, null, false, 0)) {
-                wePublished = true;
-            }
+        if (!server.isPublished() && capturedInitializer == null) {
+            server.publishServer(server.getDefaultGameType(), false, 0);
         }
         ChannelHandler initializer = capturedInitializer;
         if (initializer == null) {
@@ -197,7 +194,6 @@ public final class HostSession {
     public static synchronized void onServerStopping() {
         ensureStopped();
         capturedInitializer = null;
-        wePublished = false;
         stateServer = null;
         currentState = null;
     }
@@ -316,12 +312,6 @@ public final class HostSession {
         localEndpoint = null;
         if (server != null) {
             server.close();
-        }
-        Minecraft mc = Minecraft.getInstance();
-        IntegratedServer integrated = mc == null ? null : mc.getSingleplayerServer();
-        if (wePublished && integrated != null && integrated.isPublished()) {
-            wePublished = false;
-            integrated.unpublishServer();
         }
     }
 

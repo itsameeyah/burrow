@@ -219,7 +219,7 @@ public final class BurrowMultiplayerWorlds {
         }
 
         @Override
-        protected boolean matches(ServerSelectionList.Entry other) {
+        public boolean matches(ServerSelectionList.Entry other) {
             return other instanceof HeaderEntry;
         }
 
@@ -327,7 +327,7 @@ public final class BurrowMultiplayerWorlds {
         }
 
         @Override
-        protected boolean matches(ServerSelectionList.Entry other) {
+        public boolean matches(ServerSelectionList.Entry other) {
             return other instanceof WorldEntry w && this.world.host().equals(w.world.host());
         }
     }

@@ -8,6 +8,7 @@ repositories {
 
 loom {
 	splitEnvironmentSourceSets()
+	accessWidenerPath = file("src/client/resources/burrow.accesswidener")
 
 	mods {
 		"burrow" {

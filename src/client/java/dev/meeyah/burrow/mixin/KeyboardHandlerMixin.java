@@ -37,7 +37,7 @@ public abstract class KeyboardHandlerMixin {
         if (!BurrowToasts.hasActivePrompt()) {
             return;
         }
-        Screen screen = this.minecraft.gui == null ? null : this.minecraft.gui.screen();
+        Screen screen = this.minecraft.screen;
         if (screen != null) {
             if (screen instanceof ChatScreen
                     || screen instanceof AbstractSignEditScreen

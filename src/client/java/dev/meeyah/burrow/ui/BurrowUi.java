@@ -13,7 +13,7 @@ import net.minecraft.resources.Identifier;
 
 /**
  * Shared vanilla-styled visual primitives for Burrow screens (Host World and
- * Friends) using Minecraft 26.2's built-in 9-slice panel, tab & button sprites.
+ * Friends) using Minecraft 26.1.2's built-in 9-slice panel, tab & button sprites.
  */
 public final class BurrowUi {
     // Unified modal geometry so Friends, Requests, Host World, and Invite Friend
@@ -29,7 +29,7 @@ public final class BurrowUi {
     public static final int CONTENT_H = 136;
     public static final int FOOTER_Y = 203;
 
-    public static final Identifier PANEL_BG = Identifier.withDefaultNamespace("friends/background");
+    public static final Identifier PANEL_BG = Identifier.withDefaultNamespace("popup/background");
     public static final Identifier TAB_IDLE = Identifier.withDefaultNamespace("widget/tab");
     public static final Identifier TAB_SELECTED = Identifier.withDefaultNamespace("widget/tab_selected");
     public static final Identifier TAB_HOVER = Identifier.withDefaultNamespace("widget/tab_highlighted");

@@ -169,7 +169,7 @@ public class BurrowFriendsScreen extends Screen {
         int reqBtnW = incomingCount > 0 ? 116 : 96;
         addRenderableWidget(Button.builder(reqLabel, b -> {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(new FriendRequestsScreen(this));
+                this.minecraft.setScreen(new FriendRequestsScreen(this));
             }
         }).bounds(this.contentX, footerY, reqBtnW, 20).build());
 
@@ -177,7 +177,7 @@ public class BurrowFriendsScreen extends Screen {
             boolean hosting = HostSession.isHosting();
             addRenderableWidget(Button.builder(
                             Component.literal(hosting ? "Host Settings" : "Host World"),
-                            b -> mc.gui.setScreen(new HostWorldScreen(this)))
+                            b -> mc.setScreen(new HostWorldScreen(this)))
                     .bounds(this.contentX + reqBtnW + 4, footerY, 92, 20).build());
         } else {
             HostSession.ensureStopped();
@@ -353,7 +353,7 @@ public class BurrowFriendsScreen extends Screen {
                         Component.literal("Remove").withColor(0xFFFF8A8A),
                         b -> {
                             if (this.minecraft != null) {
-                                this.minecraft.gui.setScreen(new RemoveFriendScreen(this, f));
+                                this.minecraft.setScreen(new RemoveFriendScreen(this, f));
                             }
                         })
                 .bounds(x + w - remW - 6, btnY, remW, 18).build());
@@ -678,17 +678,17 @@ public class BurrowFriendsScreen extends Screen {
     @Override
     public void onClose() {
         if (this.parent != null && this.minecraft != null) {
-            this.minecraft.gui.setScreen(this.parent);
+            this.minecraft.setScreen(this.parent);
         } else {
             super.onClose();
         }
     }
 
     private void onFriendsChanged() {
-        if (this.minecraft == null || this.minecraft.gui == null) {
+        if (this.minecraft == null) {
             return;
         }
-        if (this.minecraft.gui.screen() instanceof BurrowFriendsScreen fs) {
+        if (this.minecraft.screen instanceof BurrowFriendsScreen fs) {
             fs.rebuildWidgets();
         }
     }
@@ -841,7 +841,7 @@ public class BurrowFriendsScreen extends Screen {
 
         private final Screen parent;
         private final FriendsState.Listener listener = () -> {
-            if (this.minecraft != null && this.minecraft.gui.screen() == this) {
+            if (this.minecraft != null && this.minecraft.screen == this) {
                 syncTypedName();
                 rebuildWidgets();
             }
@@ -1032,7 +1032,7 @@ public class BurrowFriendsScreen extends Screen {
         @Override
         public void onClose() {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(this.parent);
+                this.minecraft.setScreen(this.parent);
             }
         }
     }
@@ -1082,7 +1082,7 @@ public class BurrowFriendsScreen extends Screen {
         @Override
         public void onClose() {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(this.parent);
+                this.minecraft.setScreen(this.parent);
             }
         }
     }
