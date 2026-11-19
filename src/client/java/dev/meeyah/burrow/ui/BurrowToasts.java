@@ -28,7 +28,7 @@ public final class BurrowToasts {
 
     public static void showWorldInvite(UUID hostUuid, String hostName, String worldName, String invitedByName) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.gui == null) {
+        if (mc == null) {
             return;
         }
         String sender = (invitedByName != null && !invitedByName.isBlank() && !invitedByName.equals(hostName))
@@ -43,7 +43,7 @@ public final class BurrowToasts {
         Component title = Component.literal("World Invite — " + world);
         Component body = Component.literal(sender + " invited you · [Y] Join");
         mc.execute(() -> SystemToast.add(
-                mc.gui.toastManager(),
+                mc.getToastManager(),
                 new SystemToast.SystemToastId(TOAST_DISPLAY_MS),
                 title,
                 body));
@@ -51,7 +51,7 @@ public final class BurrowToasts {
 
     public static void showInviteRequest(UUID fromUuid, String fromName) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.gui == null || fromName == null || fromName.isBlank()) {
+        if (mc == null || fromName == null || fromName.isBlank()) {
             return;
         }
         boolean canInviteNow = mc.getSingleplayerServer() != null;
@@ -64,9 +64,9 @@ public final class BurrowToasts {
         Component body = Component.literal(
                 canInviteNow
                         ? fromName + " wants to join · [Y] Invite"
-                        : fromName + " wants to join · Press O");
+                        : fromName + " wants to join · Open Friends");
         mc.execute(() -> SystemToast.add(
-                mc.gui.toastManager(),
+                mc.getToastManager(),
                 new SystemToast.SystemToastId(TOAST_DISPLAY_MS),
                 title,
                 body));
@@ -74,7 +74,7 @@ public final class BurrowToasts {
 
     public static void showFriendRequest(UUID fromUuid, String fromName) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.gui == null || fromName == null || fromName.isBlank()) {
+        if (mc == null || fromName == null || fromName.isBlank()) {
             return;
         }
         if (fromUuid != null) {
@@ -85,7 +85,7 @@ public final class BurrowToasts {
         Component title = Component.literal("Friend Request");
         Component body = Component.literal(fromName + " wants to be friends · [Y] Accept");
         mc.execute(() -> SystemToast.add(
-                mc.gui.toastManager(),
+                mc.getToastManager(),
                 new SystemToast.SystemToastId(TOAST_DISPLAY_MS),
                 title,
                 body));
@@ -93,9 +93,9 @@ public final class BurrowToasts {
 
     public static void showInfo(String title, String body) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.gui == null) return;
+        if (mc == null) return;
         mc.execute(() -> SystemToast.add(
-                mc.gui.toastManager(),
+                mc.getToastManager(),
                 new SystemToast.SystemToastId(3_500L),
                 Component.literal(title),
                 Component.literal(body)));

@@ -5,7 +5,7 @@ import dev.meeyah.burrow.session.JoinFlow;
 import dev.meeyah.burrow.state.FriendsState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.multiplayer.ServerSelectionList;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -190,7 +190,7 @@ public final class BurrowMultiplayerWorlds {
         private static final Component LABEL = Component.literal("Burrow Worlds");
 
         @Override
-        public void extractContent(GuiGraphicsExtractor g, int mouseX, int mouseY, boolean hovered, float partialTick) {
+        public void renderContent(GuiGraphics g, int mouseX, int mouseY, boolean hovered, float partialTick) {
             Font font = Minecraft.getInstance().font;
             int midX = getContentXMiddle();
             int midY = getContentYMiddle();
@@ -210,7 +210,7 @@ public final class BurrowMultiplayerWorlds {
             }
 
             g.fill(startX, midY - 2, startX + 4, midY + 2, BurrowUi.DOT_LIVE);
-            g.text(font, LABEL, startX + 8, midY - 4, 0xFFE0E0E8, true);
+            g.drawString(font, LABEL, startX + 8, midY - 4, 0xFFE0E0E8, true);
         }
 
         @Override
@@ -219,7 +219,7 @@ public final class BurrowMultiplayerWorlds {
         }
 
         @Override
-        protected boolean matches(ServerSelectionList.Entry other) {
+        public boolean matches(ServerSelectionList.Entry other) {
             return other instanceof HeaderEntry;
         }
 
@@ -242,7 +242,7 @@ public final class BurrowMultiplayerWorlds {
         }
 
         @Override
-        public void extractContent(GuiGraphicsExtractor g, int mouseX, int mouseY, boolean hovered, float partialTick) {
+        public void renderContent(GuiGraphics g, int mouseX, int mouseY, boolean hovered, float partialTick) {
             Font font = Minecraft.getInstance().font;
             int x = getContentX();
             int y = getContentY();
@@ -270,7 +270,7 @@ public final class BurrowMultiplayerWorlds {
             if (this.world.maxPlayers() > 0) {
                 String countText = this.world.playerCount() + "/" + this.world.maxPlayers();
                 int countW = font.width(countText);
-                g.text(font, countText, rightCursor - countW, y + 1, 0xFFAAAAAA, false);
+                g.drawString(font, countText, rightCursor - countW, y + 1, 0xFFAAAAAA, false);
                 rightCursor -= countW + 6;
             }
 
@@ -278,11 +278,11 @@ public final class BurrowMultiplayerWorlds {
             int badgeW = font.width(this.world.badge()) + 6;
             int maxTitleW = Math.max(40, rightCursor - textX - badgeW - 6);
             String title = BurrowFriendsScreen.ellipsize(font, this.world.worldName(), maxTitleW);
-            g.text(font, title, textX, y + 1, BurrowUi.TEXT_PRIMARY, true);
+            g.drawString(font, title, textX, y + 1, BurrowUi.TEXT_PRIMARY, true);
             BurrowUi.drawTagPill(g, font, textX + font.width(title) + 5, y, this.world.badge(), this.world.badgeColor());
 
             int maxLineW = Math.max(60, w - 40);
-            g.text(font,
+            g.drawString(font,
                     BurrowFriendsScreen.ellipsize(font, "Hosted by " + this.world.hostName(), maxLineW),
                     textX, y + 12, 0xFFA0A0A0, false);
 
@@ -290,7 +290,7 @@ public final class BurrowMultiplayerWorlds {
                     ? "Incompatible version (MC " + this.world.gameVersion() + ")"
                     : "Burrow · " + this.world.sourceDesc();
             int line3Color = this.world.versionMismatch() ? BurrowUi.DOT_LOCKED : 0xFF808080;
-            g.text(font, BurrowFriendsScreen.ellipsize(font, line3, maxLineW), textX, y + 23, line3Color, false);
+            g.drawString(font, BurrowFriendsScreen.ellipsize(font, line3, maxLineW), textX, y + 23, line3Color, false);
         }
 
         @Override
@@ -327,7 +327,7 @@ public final class BurrowMultiplayerWorlds {
         }
 
         @Override
-        protected boolean matches(ServerSelectionList.Entry other) {
+        public boolean matches(ServerSelectionList.Entry other) {
             return other instanceof WorldEntry w && this.world.host().equals(w.world.host());
         }
     }

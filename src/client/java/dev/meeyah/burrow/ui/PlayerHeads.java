@@ -1,7 +1,10 @@
 package dev.meeyah.burrow.ui;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.PlayerFaceExtractor;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.PlayerFaceRenderer;
+import net.minecraft.client.renderer.PlayerSkinRenderCache;
+import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.world.item.component.ResolvableProfile;
 import org.jetbrains.annotations.Nullable;
 
@@ -10,8 +13,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Cached player-face drawing helper backed by Minecraft 26.2's
- * {@link PlayerFaceExtractor} and {@code PlayerSkinRenderCache}.
+ * Cached player-face drawing helper backed by Minecraft 1.21.11's
+ * {@link PlayerFaceRenderer} and {@link PlayerSkinRenderCache}.
  *
  * Caching {@link ResolvableProfile} per player avoids per-frame allocations
  * and lets vanilla's skin cache resolve real skins asynchronously once.
@@ -34,9 +37,18 @@ public final class PlayerHeads {
                 k -> ResolvableProfile.createUnresolved("Steve"));
     }
 
-    public static void draw(GuiGraphicsExtractor g, @Nullable UUID uuid, @Nullable String name, int x, int y, int size) {
+    public static void draw(GuiGraphics g, @Nullable UUID uuid, @Nullable String name, int x, int y, int size) {
         // Subtle 1px dark frame behind the head so light skins pop cleanly.
         g.fill(x - 1, y - 1, x + size + 1, y + size + 1, 0xAA000000);
-        PlayerFaceExtractor.extractRenderState(g, profile(uuid, name), x, y, size);
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) {
+            return;
+        }
+        PlayerSkinRenderCache cache = mc.playerSkinRenderCache();
+        if (cache == null) {
+            return;
+        }
+        PlayerSkin skin = cache.getOrDefault(profile(uuid, name)).playerSkin();
+        PlayerFaceRenderer.draw(g, skin, x, y, size);
     }
 }
