@@ -3,8 +3,8 @@ package dev.meeyah.burrow.mixin;
 import dev.meeyah.burrow.ui.BurrowFriendsScreen;
 import dev.meeyah.burrow.ui.HostWorldScreen;
 import net.minecraft.client.gui.Gui;
-import net.minecraft.client.gui.screens.MultiplayerOptionsScreen;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.WorldOptionsScreen;
 import net.minecraft.client.gui.screens.friends.FriendsOverlayScreen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -24,7 +24,7 @@ public abstract class GuiMixin {
             Screen parent = ((Gui) (Object) this).screen();
             return new BurrowFriendsScreen(parent);
         }
-        if (screen instanceof MultiplayerOptionsScreen) {
+        if (screen instanceof WorldOptionsScreen) {
             Screen parent = ((Gui) (Object) this).screen();
             return new HostWorldScreen(parent);
         }

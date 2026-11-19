@@ -24,7 +24,7 @@ public abstract class JoinMultiplayerScreenMixin {
     protected ServerSelectionList serverSelectionList;
 
     @Shadow
-    private Button selectButton;
+    private Button joinButton;
 
     @Shadow
     protected abstract void onSelectedChange();
@@ -57,14 +57,14 @@ public abstract class JoinMultiplayerScreenMixin {
 
     @Inject(method = "onSelectedChange", at = @At("TAIL"))
     private void burrow$guardSelection(CallbackInfo ci) {
-        if (this.serverSelectionList == null || this.selectButton == null) {
+        if (this.serverSelectionList == null || this.joinButton == null) {
             return;
         }
         ServerSelectionList.Entry selected = this.serverSelectionList.getSelected();
         if (selected instanceof BurrowMultiplayerWorlds.HeaderEntry) {
-            this.selectButton.active = false;
+            this.joinButton.active = false;
         } else if (selected instanceof BurrowMultiplayerWorlds.WorldEntry we && we.world().versionMismatch()) {
-            this.selectButton.active = false;
+            this.joinButton.active = false;
         }
     }
 

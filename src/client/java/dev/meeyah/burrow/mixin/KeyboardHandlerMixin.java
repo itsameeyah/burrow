@@ -1,5 +1,6 @@
 package dev.meeyah.burrow.mixin;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.meeyah.burrow.ui.BurrowToasts;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.Minecraft;
@@ -9,7 +10,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.client.gui.screens.inventory.BookEditScreen;
 import net.minecraft.client.input.KeyEvent;
-import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -31,7 +31,7 @@ public abstract class KeyboardHandlerMixin {
 
     @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void burrow$handleToastQuickAccept(long window, int action, KeyEvent event, CallbackInfo ci) {
-        if (action != GLFW.GLFW_PRESS || event.key() != GLFW.GLFW_KEY_Y || event.modifiers() != 0) {
+        if (action != InputConstants.PRESS || event.key() != InputConstants.KEY_Y || event.modifiers() != 0) {
             return;
         }
         if (!BurrowToasts.hasActivePrompt()) {

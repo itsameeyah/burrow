@@ -6,7 +6,7 @@ import com.mojang.authlib.exceptions.ForcedUsernameChangeException;
 import com.mojang.authlib.exceptions.InsufficientPrivilegesException;
 import com.mojang.authlib.exceptions.InvalidCredentialsException;
 import com.mojang.authlib.exceptions.UserBannedException;
-import com.mojang.authlib.minecraft.MinecraftSessionService;
+import com.mojang.authlib.minecraft.SessionService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.User;
 import net.minecraft.server.Services;
@@ -20,7 +20,7 @@ import java.util.function.Consumer;
 /**
  * Mojang sessionserver authentication helper for Burrow signaling handshakes.
  *
- * Uses Minecraft's own logged-in {@link User} and {@link MinecraftSessionService}
+ * Uses Minecraft's own logged-in {@link User} and {@link SessionService}
  * to answer the server's {@code auth.challenge} via Mojang's standard
  * {@code joinServer} call, proving ownership of the Minecraft account without
  * Burrow ever seeing the player's access token.
@@ -92,7 +92,7 @@ public final class MojangAuth {
             }
 
             Services services = mc.services();
-            MinecraftSessionService sessionService = services != null ? services.sessionService() : null;
+            SessionService sessionService = services != null ? services.sessionService() : null;
             if (sessionService == null) {
                 fail(onFailure, "Minecraft session service is unavailable.");
                 return;

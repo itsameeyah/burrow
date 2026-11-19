@@ -84,7 +84,7 @@ public final class HostSession {
         // Publish to the LAN scope so the game creates its real server
         // channel — and our mixin captures the initializer during the bind.
         if (!server.isPublished()) {
-            if (server.publishServer(MinecraftServer.MultiplayerScope.LAN, null, false, 0)) {
+            if (server.publishServer(MinecraftServer.MultiplayerScope.LAN, false, 0)) {
                 wePublished = true;
             }
         }

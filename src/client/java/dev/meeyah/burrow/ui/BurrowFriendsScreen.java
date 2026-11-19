@@ -1,6 +1,7 @@
 package dev.meeyah.burrow.ui;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.meeyah.burrow.BurrowClient;
 import dev.meeyah.burrow.config.BurrowConfig;
 import dev.meeyah.burrow.net.BurrowConnection;
@@ -23,7 +24,6 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -1005,7 +1005,7 @@ public class BurrowFriendsScreen extends Screen {
         @Override
         public boolean keyPressed(KeyEvent event) {
             if (this.nameBox != null && this.nameBox.isFocused()
-                    && (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER)) {
+                    && (event.key() == InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER)) {
                 sendRequest();
                 return true;
             }

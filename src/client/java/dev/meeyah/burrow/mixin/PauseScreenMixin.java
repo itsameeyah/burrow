@@ -10,14 +10,14 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 /**
- * Repurposes the Pause Menu's "Open to LAN / Multiplayer Options" button as
+ * Repurposes the Pause Menu's "World Options" button as
  * Burrow's "Host World" control panel.
  */
 @Mixin(PauseScreen.class)
 public abstract class PauseScreenMixin {
     @Shadow
     @Final
-    private static Component MULTIPLAYER_OPTIONS;
+    private static Component WORLD_OPTIONS;
 
     @ModifyArg(
             method = "createPauseMenu",
@@ -28,7 +28,7 @@ public abstract class PauseScreenMixin {
             index = 0
     )
     private Component burrow$relabelHostWorldButton(Component label) {
-        if (label == MULTIPLAYER_OPTIONS) {
+        if (label == WORLD_OPTIONS) {
             return Component.literal(HostSession.isHosting() ? "Host Settings" : "Host World");
         }
         return label;
