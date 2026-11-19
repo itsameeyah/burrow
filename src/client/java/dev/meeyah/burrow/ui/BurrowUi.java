@@ -1,5 +1,6 @@
 package dev.meeyah.burrow.ui;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -61,9 +62,47 @@ public final class BurrowUi {
 
     private BurrowUi() {}
 
-    /** Outer vanilla 9-slice modal panel (uses the sprite's own clean border, no extra halo). */
+    /**
+     * Classic Minecraft bevelled silver-frame modal panel with a recessed dark
+     * slate interior, matching Minecraft 26.2+'s friends/background style.
+     */
     public static void drawModalPanel(GuiGraphics g, int x, int y, int w, int h) {
-        g.blitSprite(PANEL_BG, x, y, w, h);
+        int r = x + w;
+        int b = y + h;
+        final int BLACK = 0xFF000000;
+        final int WHITE = 0xFFFFFFFF;
+        final int LIGHT = 0xFFC6C6C6;
+        final int DARK  = 0xFF555555;
+        final int INNER = 0xFF373737;
+
+        g.fill(x + 2, y, r - 3, b - 1, BLACK);
+        g.fill(x + 1, y + 1, r - 2, b - 2, BLACK);
+        g.fill(x, y + 2, r - 1, b - 3, BLACK);
+        g.fill(x + 3, y + 3, r, b - 2, BLACK);
+        g.fill(x + 2, y + 2, r - 1, b - 1, BLACK);
+        g.fill(x + 3, y + 2, r - 2, b, BLACK);
+
+        g.fill(x + 2, y + 1, r - 3, y + 3, WHITE);
+        g.fill(x + 1, y + 2, x + 3, b - 3, WHITE);
+        g.fill(x + 3, y + 3, x + 4, y + 4, WHITE);
+
+        g.fill(x + 3, b - 3, r - 2, b - 1, DARK);
+        g.fill(r - 3, y + 3, r - 1, b - 2, DARK);
+        g.fill(r - 4, b - 4, r - 3, b - 3, DARK);
+
+        g.fill(x + 3, y + 3, r - 3, b - 3, LIGHT);
+        g.fill(x + 3, y + 3, x + 4, y + 4, WHITE);
+        g.fill(r - 4, b - 4, r - 3, b - 3, DARK);
+        g.fill(r - 3, y + 2, r - 2, y + 3, LIGHT);
+        g.fill(x + 2, b - 3, x + 3, b - 2, LIGHT);
+
+        g.fill(x + 7, y + 7, r - 7, b - 7, WHITE);
+        g.fill(x + 7, y + 7, r - 8, y + 8, BLACK);
+        g.fill(x + 7, y + 7, x + 8, b - 8, BLACK);
+        g.fill(r - 8, y + 7, r - 7, y + 8, DARK);
+        g.fill(x + 7, b - 8, x + 8, b - 7, DARK);
+
+        g.fill(x + 8, y + 8, r - 8, b - 8, INNER);
     }
 
     /** Crisp flat dark recessed container inside a modal panel. */
@@ -121,7 +160,10 @@ public final class BurrowUi {
             ResourceLocation sprite = this.selected
                     ? (this.isHoveredOrFocused() ? TAB_SELECTED_HOVER : TAB_SELECTED)
                     : (this.isHoveredOrFocused() ? TAB_HOVER : TAB_IDLE);
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
             g.blitSprite(sprite, getX(), getY(), getWidth(), getHeight());
+            RenderSystem.disableBlend();
             Font font = Minecraft.getInstance().font;
             int color = this.selected ? TEXT_PRIMARY : (this.isHoveredOrFocused() ? 0xFFE8E8EE : TEXT_SECONDARY);
             int textY = getY() + (getHeight() - 8) / 2 + (this.selected ? 0 : 1);
@@ -160,7 +202,10 @@ public final class BurrowUi {
         @Override
         protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
             ResourceLocation sprite = this.isHoveredOrFocused() ? BUTTON_HOVER : BUTTON_IDLE;
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
             g.blitSprite(sprite, getX(), getY(), getWidth(), getHeight());
+            RenderSystem.disableBlend();
 
             int left = getX();
             int top = getY();
@@ -197,6 +242,88 @@ public final class BurrowUi {
         public void onClick(double mouseX, double mouseY) {
             playDownSound(Minecraft.getInstance().getSoundManager());
             this.onToggle.run();
+        }
+
+        @Override
+        protected void updateWidgetNarration(NarrationElementOutput output) {
+            defaultButtonNarrationText(output);
+        }
+    }
+
+    /** Compact 20x20 vanilla icon button with a crisp pixel-art two-heads Friends icon. */
+    public static final class FriendsButton extends AbstractWidget {
+        private static final String[] ICON = {
+                ".....KKKKKKKKKK.",
+                ".....KOOooOOOOOK",
+                ".....KOOOOOOOOOK",
+                ".....KOAAAaAAOOK",
+                ".....KAAAAAAAAOK",
+                ".....KAWGAaAGWAK",
+                ".KKKKKKKKKKAAaAK",
+                ".KHHhHHHHHKAAMAK",
+                ".KHHHHHHHHKaaaAK",
+                ".KHSSSSSSHKKKKK.",
+                ".KSSSSSSSSK.....",
+                ".KSWBSsSBWK.....",
+                ".KSSSNNSssK.....",
+                ".KSSDDDDsSK.....",
+                ".KSSsSSsSSK.....",
+                ".KKKKKKKKKK....."
+        };
+
+        private final Runnable onPress;
+
+        public FriendsButton(int x, int y, Runnable onPress) {
+            super(x, y, 20, 20, Component.literal("Friends"));
+            this.onPress = onPress;
+            setTooltip(Tooltip.create(Component.literal("Friends")));
+        }
+
+        private static int iconColor(char c) {
+            return switch (c) {
+                case 'K' -> 0xFF1E1E1F;
+                case 'O' -> 0xFFD97D2B;
+                case 'o' -> 0xFFB85E1E;
+                case 'A' -> 0xFFF5D8BA;
+                case 'a' -> 0xFFE0BA96;
+                case 'G' -> 0xFF2D7A32;
+                case 'W' -> 0xFFFFFFFF;
+                case 'M' -> 0xFFD4927B;
+                case 'H' -> 0xFF4A2B17;
+                case 'h' -> 0xFF382010;
+                case 'S' -> 0xFFD49E72;
+                case 's' -> 0xFFBD845A;
+                case 'B' -> 0xFF523CA6;
+                case 'N' -> 0xFFA66B46;
+                case 'D' -> 0xFF6B3E26;
+                default -> 0;
+            };
+        }
+
+        @Override
+        protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+            ResourceLocation sprite = this.isHoveredOrFocused() ? BUTTON_HOVER : BUTTON_IDLE;
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
+            g.blitSprite(sprite, getX(), getY(), getWidth(), getHeight());
+            RenderSystem.disableBlend();
+            int ox = getX() + 2;
+            int oy = getY() + 2;
+            for (int row = 0; row < ICON.length; row++) {
+                String line = ICON[row];
+                for (int col = 0; col < line.length(); col++) {
+                    int argb = iconColor(line.charAt(col));
+                    if (argb != 0) {
+                        g.fill(ox + col, oy + row, ox + col + 1, oy + row + 1, argb);
+                    }
+                }
+            }
+        }
+
+        @Override
+        public void onClick(double mouseX, double mouseY) {
+            playDownSound(Minecraft.getInstance().getSoundManager());
+            this.onPress.run();
         }
 
         @Override

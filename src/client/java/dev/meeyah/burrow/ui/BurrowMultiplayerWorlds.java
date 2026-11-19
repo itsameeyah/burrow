@@ -1,5 +1,6 @@
 package dev.meeyah.burrow.ui;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import dev.meeyah.burrow.BurrowClient;
 import dev.meeyah.burrow.session.JoinFlow;
 import dev.meeyah.burrow.state.FriendsState;
@@ -275,13 +276,19 @@ public final class BurrowMultiplayerWorlds {
             if (hovered && !this.world.versionMismatch()) {
                 g.fill(x, y, x + 32, y + 32, 0x80909090);
                 ResourceLocation sprite = hoveringIcon ? JOIN_HIGHLIGHTED_SPRITE : JOIN_SPRITE;
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
                 g.blitSprite(sprite, x, y, 32, 32);
+                RenderSystem.disableBlend();
             }
 
             // Right-side status icon + player count (aligned like OnlineServerEntry)
             int rightCursor = x + w - 5;
             if (this.world.versionMismatch()) {
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
                 g.blitSprite(INCOMPATIBLE_SPRITE, rightCursor - 10, y + 1, 10, 8);
+                RenderSystem.disableBlend();
                 rightCursor -= 14;
             } else {
                 g.fill(rightCursor - 5, y + 3, rightCursor - 1, y + 7, BurrowUi.DOT_LIVE);
