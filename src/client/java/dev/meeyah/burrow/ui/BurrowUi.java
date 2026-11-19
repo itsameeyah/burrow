@@ -63,9 +63,9 @@ public final class BurrowUi {
 
     private BurrowUi() {}
 
-    /** Outer vanilla 9-slice modal panel (uses the sprite's own clean border, no extra halo). */
+    /** Outer vanilla 9-slice modal panel (uses explicit burrow:panel_bg override or built-in vanilla). */
     public static void drawModalPanel(GuiGraphicsExtractor g, int x, int y, int w, int h) {
-        g.blitSprite(RenderPipelines.GUI_TEXTURED, PANEL_BG, x, y, w, h);
+        BurrowVanillaSprites.draw(g, BurrowVanillaSprites.PANEL_BG, x, y, w, h);
     }
 
     /** Crisp flat dark recessed container inside a modal panel. */
@@ -120,10 +120,10 @@ public final class BurrowUi {
 
         @Override
         protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-            Identifier sprite = this.selected
-                    ? (this.isHoveredOrFocused() ? TAB_SELECTED_HOVER : TAB_SELECTED)
-                    : (this.isHoveredOrFocused() ? TAB_HOVER : TAB_IDLE);
-            g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, getX(), getY(), getWidth(), getHeight());
+            BurrowVanillaSprites.SpriteSpec sprite = this.selected
+                    ? (this.isHoveredOrFocused() ? BurrowVanillaSprites.TAB_SELECTED_HOVER : BurrowVanillaSprites.TAB_SELECTED)
+                    : (this.isHoveredOrFocused() ? BurrowVanillaSprites.TAB_HOVER : BurrowVanillaSprites.TAB_IDLE);
+            BurrowVanillaSprites.draw(g, sprite, getX(), getY(), getWidth(), getHeight());
             Font font = Minecraft.getInstance().font;
             int color = this.selected ? TEXT_PRIMARY : (this.isHoveredOrFocused() ? 0xFFE8E8EE : TEXT_SECONDARY);
             int textY = getY() + (getHeight() - 8) / 2 + (this.selected ? 0 : 1);
@@ -161,8 +161,10 @@ public final class BurrowUi {
 
         @Override
         protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-            Identifier sprite = this.isHoveredOrFocused() ? BUTTON_HOVER : BUTTON_IDLE;
-            g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, getX(), getY(), getWidth(), getHeight());
+            BurrowVanillaSprites.SpriteSpec sprite = this.isHoveredOrFocused()
+                    ? BurrowVanillaSprites.BUTTON_HOVER
+                    : BurrowVanillaSprites.BUTTON_IDLE;
+            BurrowVanillaSprites.draw(g, sprite, getX(), getY(), getWidth(), getHeight());
 
             int left = getX();
             int top = getY();
