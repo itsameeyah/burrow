@@ -3,6 +3,7 @@ package dev.meeyah.burrow.state;
 import dev.meeyah.burrow.ui.BurrowToasts;
 import net.minecraft.client.Minecraft;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -149,6 +150,8 @@ public final class FriendsState {
     private final List<InviteRequest> inviteRequests = new CopyOnWriteArrayList<>();
     private final List<DiscoverableWorld> discoverable = new CopyOnWriteArrayList<>();
     private final List<WorldInvite> invites = new CopyOnWriteArrayList<>();
+    private final Set<UUID> registeredUuids = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final Set<String> registeredNamesLower = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private volatile UUID selfUuid;
     private volatile String selfName;
@@ -220,6 +223,25 @@ public final class FriendsState {
             if (uuid.equals(f.uuid())) return true;
         }
         return false;
+    }
+
+    public boolean isFriendByName(String name) {
+        if (name == null || name.isBlank()) return false;
+        for (Friend f : friends) {
+            if (f.name() != null && f.name().equalsIgnoreCase(name)) return true;
+        }
+        return false;
+    }
+
+    public void recordRegisteredUsers(Collection<UUID> uuids, Collection<String> namesLower) {
+        registeredUuids.addAll(uuids);
+        registeredNamesLower.addAll(namesLower);
+        fireChanged();
+    }
+
+    public boolean hasBurrowAccount(UUID uuid, String name) {
+        if (uuid != null && registeredUuids.contains(uuid)) return true;
+        return name != null && registeredNamesLower.contains(name.toLowerCase());
     }
 
     public UUID selfUuid() {

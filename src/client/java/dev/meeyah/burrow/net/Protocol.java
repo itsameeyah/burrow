@@ -28,6 +28,7 @@ public final class Protocol {
     public static final String OP_SESSION_INVITE = "session.invite";
     public static final String OP_PRESENCE_UPDATE = "presence.update";
     public static final String OP_INVITE_REQUEST = "invite.request";
+    public static final String OP_USERS_CHECK = "users.check";
     public static final String OP_JOIN_BEGIN = "join.begin";
 
     // Server -> client
@@ -37,6 +38,7 @@ public final class Protocol {
     public static final String OP_SESSION_STATE = "session.state";
     public static final String OP_INVITE_RECEIVED = "invite.received";
     public static final String OP_INVITE_REQUESTED = "invite.requested";
+    public static final String OP_USERS_CHECK_RESULT = "users.check.result";
     public static final String OP_JOIN_READY = "join.ready";
     public static final String OP_RELAY_HOST = "relay.host";
     public static final String OP_ERROR = "error";
@@ -131,6 +133,17 @@ public final class Protocol {
     public static JsonObject inviteRequest(UUID friendId) {
         JsonObject o = msg(OP_INVITE_REQUEST);
         o.addProperty("uuid", friendId.toString());
+        return o;
+    }
+
+    public static JsonObject usersCheck(Collection<UUID> uuids, Collection<String> names) {
+        JsonObject o = msg(OP_USERS_CHECK);
+        JsonArray uArr = new JsonArray();
+        for (UUID u : uuids) uArr.add(u.toString());
+        o.add("uuids", uArr);
+        JsonArray nArr = new JsonArray();
+        for (String n : names) nArr.add(n);
+        o.add("names", nArr);
         return o;
     }
 

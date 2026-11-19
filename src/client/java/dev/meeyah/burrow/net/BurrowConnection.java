@@ -203,6 +203,21 @@ public final class BurrowConnection {
                     BurrowToasts.showInviteRequest(from, fromName);
                 }
             }
+            case Protocol.OP_USERS_CHECK_RESULT -> {
+                List<UUID> uuids = new ArrayList<>();
+                for (JsonElement el : array(msg, "uuids")) {
+                    if (el.isJsonPrimitive()) {
+                        try { uuids.add(UUID.fromString(el.getAsString())); } catch (Exception ignored) {}
+                    }
+                }
+                List<String> names = new ArrayList<>();
+                for (JsonElement el : array(msg, "names")) {
+                    if (el.isJsonPrimitive()) {
+                        names.add(el.getAsString().toLowerCase());
+                    }
+                }
+                state.recordRegisteredUsers(uuids, names);
+            }
             case Protocol.OP_JOIN_READY -> JoinFlow.onJoinReady(
                     uuid(msg, "host"),
                     str(msg, "worldName"),
@@ -438,6 +453,10 @@ public final class BurrowConnection {
 
     public void requestInvite(UUID friendId) {
         send(Protocol.inviteRequest(friendId));
+    }
+
+    public void checkUsers(java.util.Collection<UUID> uuids, java.util.Collection<String> names) {
+        send(Protocol.usersCheck(uuids, names));
     }
 
     public void sessionClose() {
