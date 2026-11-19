@@ -17,17 +17,17 @@ import net.minecraft.resources.Identifier;
  */
 public final class BurrowUi {
     // Unified modal geometry so Friends, Requests, Host World, and Invite Friend
-    // all share the exact same frame size and generous 14px padding.
+    // all share the exact same frame size and even 14px padding on every edge.
     public static final int PANEL_W = 360;
-    public static final int PANEL_H = 236;
+    public static final int PANEL_H = 237;
     public static final int PAD = 14;
-    public static final int HEADER_TITLE_Y = 13;
-    public static final int HEADER_SUB_Y = 25;
-    public static final int TABS_Y = 40;
+    public static final int HEADER_TITLE_Y = 14;
+    public static final int HEADER_SUB_Y = 26;
+    public static final int TABS_Y = 41;
     public static final int TAB_H = 20;
-    public static final int CONTENT_Y = 59;
+    public static final int CONTENT_Y = 60;
     public static final int CONTENT_H = 136;
-    public static final int FOOTER_Y = 202;
+    public static final int FOOTER_Y = 203;
 
     public static final Identifier PANEL_BG = Identifier.withDefaultNamespace("friends/background");
     public static final Identifier TAB_IDLE = Identifier.withDefaultNamespace("widget/tab");
@@ -164,28 +164,33 @@ public final class BurrowUi {
             Identifier sprite = this.isHoveredOrFocused() ? BUTTON_HOVER : BUTTON_IDLE;
             g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, getX(), getY(), getWidth(), getHeight());
 
-            int cx = getX() + 10;
-            int cy = getY() + 10;
+            int left = getX();
+            int top = getY();
             int fg = this.incognito ? 0xFFD8A8FF : 0xFFEAEAF0;
 
-            // Clean pixel-art eye shape (12px wide x 7px tall centered at cx, cy)
-            // Top & bottom eyelids
-            g.fill(cx - 3, cy - 3, cx + 3, cy - 2, fg);
-            g.fill(cx - 5, cy - 2, cx - 3, cy - 1, fg);
-            g.fill(cx + 3, cy - 2, cx + 5, cy - 1, fg);
-            g.fill(cx - 6, cy - 1, cx - 5, cy + 1, fg);
-            g.fill(cx + 5, cy - 1, cx + 6, cy + 1, fg);
-            g.fill(cx - 5, cy + 1, cx - 3, cy + 2, fg);
-            g.fill(cx + 3, cy + 1, cx + 5, cy + 2, fg);
-            g.fill(cx - 3, cy + 2, cx + 3, cy + 3, fg);
+            // Symmetrical 12x7 pixel-art almond eye centered inside the 20x20
+            // vanilla button interior (x in [4..16), y in [6..13), center row y=9).
+            g.fill(left + 8, top + 6, left + 12, top + 7, fg);
+            g.fill(left + 6, top + 7, left + 8, top + 8, fg);
+            g.fill(left + 12, top + 7, left + 14, top + 8, fg);
+            g.fill(left + 5, top + 8, left + 6, top + 9, fg);
+            g.fill(left + 14, top + 8, left + 15, top + 9, fg);
+            g.fill(left + 4, top + 9, left + 5, top + 10, fg);
+            g.fill(left + 15, top + 9, left + 16, top + 10, fg);
+            g.fill(left + 5, top + 10, left + 6, top + 11, fg);
+            g.fill(left + 14, top + 10, left + 15, top + 11, fg);
+            g.fill(left + 6, top + 11, left + 8, top + 12, fg);
+            g.fill(left + 12, top + 11, left + 14, top + 12, fg);
+            g.fill(left + 8, top + 12, left + 12, top + 13, fg);
 
             if (!this.incognito) {
-                // Open pupil
-                g.fill(cx - 1, cy - 1, cx + 2, cy + 2, fg);
+                // Centered rounded 4x3 pupil (symmetric around x=10, y=9)
+                g.fill(left + 9, top + 8, left + 11, top + 11, fg);
+                g.fill(left + 8, top + 9, left + 12, top + 10, fg);
             } else {
-                // Diagonal slash across the eye when Incognito is ON
+                // Centered diagonal slash across the eye when Incognito is ON
                 for (int i = -4; i <= 4; i++) {
-                    g.fill(cx + i, cy + i, cx + i + 2, cy + i + 1, 0xFFFF88B8);
+                    g.fill(left + 9 + i, top + 9 + i, left + 11 + i, top + 10 + i, 0xFFFF88B8);
                 }
             }
         }

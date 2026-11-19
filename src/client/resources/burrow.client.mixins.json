@@ -6,6 +6,8 @@
 		"GuiMixin",
 		"PauseScreenMixin",
 		"KeyboardHandlerMixin",
+		"JoinMultiplayerScreenMixin",
+		"ServerSelectionListMixin",
 		"OnlineOptionsScreenMixin",
 		"ServerConnectionListenerMixin",
 		"ServerNameResolverMixin",

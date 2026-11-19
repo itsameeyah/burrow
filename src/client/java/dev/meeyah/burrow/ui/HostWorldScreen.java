@@ -630,7 +630,7 @@ public class HostWorldScreen extends Screen {
 
             int boxX = this.innerX + 8;
             int boxW = this.innerW - 16;
-            int y = this.modalY + 48;
+            int y = this.modalY + BurrowUi.TABS_Y + 8;
 
             if (online.isEmpty()) {
                 this.emptyMsg = "No friends online right now.";
@@ -656,7 +656,7 @@ public class HostWorldScreen extends Screen {
             BurrowUi.drawModalPanel(g, this.modalX, this.modalY, BurrowUi.PANEL_W, BurrowUi.PANEL_H);
             g.text(this.font, "Invite Friend to World", this.innerX, this.modalY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
             g.text(this.font, "Invites expire after 30 seconds", this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
-            BurrowUi.drawInsetBox(g, this.innerX, this.modalY + 40, this.innerW, 155);
+            BurrowUi.drawInsetBox(g, this.innerX, this.modalY + BurrowUi.TABS_Y, this.innerW, 155);
 
             for (BanRowDisplay row : this.rows) {
                 g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), BurrowUi.CARD_BG);
@@ -666,7 +666,7 @@ public class HostWorldScreen extends Screen {
             }
             if (this.emptyMsg != null) {
                 g.centeredText(this.font, this.emptyMsg,
-                        this.modalX + BurrowUi.PANEL_W / 2, this.modalY + 114, BurrowUi.TEXT_MUTED);
+                        this.modalX + BurrowUi.PANEL_W / 2, this.modalY + BurrowUi.TABS_Y + 74, BurrowUi.TEXT_MUTED);
             }
         }
 
