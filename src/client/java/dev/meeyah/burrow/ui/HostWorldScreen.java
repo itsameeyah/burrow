@@ -479,7 +479,7 @@ public class HostWorldScreen extends Screen {
             case INVITE_ONLY -> "Only players you explicitly invite can see or join.";
             case FRIENDS -> "Your Burrow friends can join directly.";
             case FRIENDS_OF_FRIENDS -> "Your friends and their direct friends (1 hop) can join.";
-            case OPEN -> "Anyone on the Burrow server can join.";
+            case OPEN -> "Anyone connected along your friend chain (friends of friends of friends...).";
         };
     }
 

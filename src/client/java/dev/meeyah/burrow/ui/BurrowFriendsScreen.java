@@ -513,7 +513,7 @@ public class BurrowFriendsScreen extends Screen {
                 badge = "via " + w.viaName();
                 color = BurrowUi.ROLE_VISITOR;
             } else if ("open".equals(w.access())) {
-                badge = "Open";
+                badge = "Network";
                 color = BurrowUi.ROLE_MEMBER;
             } else {
                 badge = "World";
@@ -528,7 +528,7 @@ public class BurrowFriendsScreen extends Screen {
 
     private void initWorldsTab(List<WorldEntry> items) {
         if (items.isEmpty()) {
-            this.emptyMessage = "No open or friends-of-friends worlds right now.";
+            this.emptyMessage = "No friend-network worlds available right now.";
             return;
         }
 

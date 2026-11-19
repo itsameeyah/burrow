@@ -33,7 +33,7 @@ public final class HostWorldState {
         INVITE_ONLY("invite_only", "Invite Only"),
         FRIENDS("friends", "Friends Only"),
         FRIENDS_OF_FRIENDS("friends_of_friends", "Friends of Friends"),
-        OPEN("open", "Open");
+        OPEN("open", "Friend Network");
 
         private final String wire;
         private final String label;
@@ -121,7 +121,7 @@ public final class HostWorldState {
                         : "Joined via Invite";
             }
             if ("open".equals(source)) {
-                return "Joined via Open world";
+                return "Joined via Friend Network";
             }
             return "Local LAN";
         }
@@ -134,7 +134,7 @@ public final class HostWorldState {
             if ("invite".equals(source)) {
                 return viaName != null && !viaName.isBlank() ? "Invited by " + viaName : "Invited";
             }
-            if ("open".equals(source)) return "Open";
+            if ("open".equals(source)) return "Network";
             return "LAN";
         }
     }

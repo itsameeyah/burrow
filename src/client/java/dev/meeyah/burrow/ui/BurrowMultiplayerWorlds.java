@@ -157,9 +157,9 @@ public final class BurrowMultiplayerWorlds {
                 badgeColor = BurrowUi.ROLE_VISITOR;
                 sourceDesc = "Friend of " + w.viaName();
             } else if ("open".equals(w.access())) {
-                badge = "Open";
+                badge = "Network";
                 badgeColor = BurrowUi.ROLE_MEMBER;
-                sourceDesc = "Open World";
+                sourceDesc = "Friend Network";
             } else {
                 badge = "Burrow";
                 badgeColor = BurrowUi.ROLE_HOST;
