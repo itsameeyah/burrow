@@ -17,6 +17,8 @@ public final class FriendsState {
 
     public record PresenceUpdate(UUID uuid, String presence, boolean hosting, String worldName) {}
 
+    public record SessionUpdate(UUID host, boolean active, String worldName) {}
+
     public interface Listener {
         void friendsChanged();
     }
@@ -97,6 +99,29 @@ public final class FriendsState {
                             u.presence() != null ? u.presence() : f.presence(),
                             u.hosting(),
                             u.worldName() != null ? u.worldName() : f.worldName()));
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        if (changed) {
+            fireChanged();
+        }
+    }
+
+    public void applySessions(List<SessionUpdate> updates) {
+        boolean changed = false;
+        for (SessionUpdate u : updates) {
+            if (u.host() == null) continue;
+            for (int i = 0; i < friends.size(); i++) {
+                Friend f = friends.get(i);
+                if (u.host().equals(f.uuid())) {
+                    friends.set(i, new Friend(
+                            f.uuid(),
+                            f.name(),
+                            u.active() ? "online" : f.presence(),
+                            u.active(),
+                            u.active() && u.worldName() != null ? u.worldName() : ""));
                     changed = true;
                     break;
                 }

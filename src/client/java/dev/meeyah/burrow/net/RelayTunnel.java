@@ -19,11 +19,11 @@ import org.jetbrains.annotations.Nullable;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * One Burrow tunnel: a relay websocket bridged to one end of a netty local
@@ -39,11 +39,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * and both sides pump bytes into the relay.
  *
  * Early relay frames that arrive before the game-side channel is active
- * are buffered (bounded) and flushed on channelActive, so the joiner's
- * first handshake packet can never be silently dropped.
+ * are buffered (bounded) and flushed in strict FIFO order on channelActive,
+ * so the joiner's first handshake packet can never be dropped or reordered.
  */
 public final class RelayTunnel {
     public enum Mode { HOST, JOIN }
+
+    /** Prefix for join-side local addresses; ConnectionMemoryMixin matches on it. */
+    public static final String JOIN_ADDRESS_PREFIX = "burrow-join-";
 
     private static final int MAX_PENDING_FRAMES = 512;
 
@@ -51,10 +54,11 @@ public final class RelayTunnel {
     private final String relayUrl;
     private final @Nullable SocketAddress serverSideAddress;
     private final Runnable onClosed;
-    private final AtomicReference<Channel> gameChannel = new AtomicReference<>();
+    /** Guards gameChannel + pendingFromRelay so early frames are strictly ordered. */
+    private final Object stateLock = new Object();
+    private @Nullable Channel gameChannel;
+    private final Deque<byte[]> pendingFromRelay = new ArrayDeque<>();
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    /** Frames from the relay that arrived before the game-side channel was ready. */
-    private final ConcurrentLinkedQueue<byte[]> pendingFromRelay = new ConcurrentLinkedQueue<>();
     private volatile WebSocketClient webSocket;
     private volatile Channel localChannel;      // HOST: LocalChannel to server endpoint; JOIN: our LocalServerChannel
     private volatile LocalAddress joinAddress;   // JOIN only: where vanilla connects
@@ -68,7 +72,7 @@ public final class RelayTunnel {
         if (mode == Mode.JOIN) {
             // Bind our half before anything else so the vanilla client's
             // (soon-to-be redirected) connect always finds a listener.
-            this.joinAddress = new LocalAddress("burrow-join-" + UUID.randomUUID());
+            this.joinAddress = new LocalAddress(JOIN_ADDRESS_PREFIX + UUID.randomUUID());
             this.localChannel = new ServerBootstrap()
                     .group(EventLoopGroupHolder.local().eventLoopGroup())
                     .channel(LocalServerChannel.class)
@@ -91,7 +95,14 @@ public final class RelayTunnel {
     }
 
     public void connectBlocking(int timeoutSeconds) throws InterruptedException {
-        WebSocketClient ws = new WebSocketClient(URI.create(this.relayUrl)) {
+        URI uri;
+        try {
+            uri = URI.create(this.relayUrl);
+        } catch (Exception e) {
+            shutdown();
+            throw new IllegalArgumentException("invalid relay URL: " + this.relayUrl, e);
+        }
+        WebSocketClient ws = new WebSocketClient(uri) {
             @Override
             public void onOpen(ServerHandshake handshake) {
                 onRelayOpen();
@@ -104,13 +115,28 @@ public final class RelayTunnel {
 
             @Override
             public void onMessage(ByteBuffer bytes) {
+                if (RelayTunnel.this.closed.get()) {
+                    return;
+                }
                 byte[] data = new byte[bytes.remaining()];
                 bytes.get(data);
-                Channel game = RelayTunnel.this.gameChannel.get();
-                if (game != null && game.isActive()) {
-                    game.writeAndFlush(Unpooled.wrappedBuffer(data));
-                } else if (RelayTunnel.this.pendingFromRelay.size() < MAX_PENDING_FRAMES) {
-                    RelayTunnel.this.pendingFromRelay.add(data);
+                Channel target = null;
+                boolean overflow = false;
+                synchronized (RelayTunnel.this.stateLock) {
+                    Channel ch = RelayTunnel.this.gameChannel;
+                    if (ch != null) {
+                        target = ch;
+                    } else if (RelayTunnel.this.pendingFromRelay.size() < MAX_PENDING_FRAMES) {
+                        RelayTunnel.this.pendingFromRelay.addLast(data);
+                    } else {
+                        overflow = true;
+                    }
+                }
+                if (overflow) {
+                    // Never silently drop bytes from an encrypted TCP stream.
+                    RelayTunnel.this.shutdown();
+                } else if (target != null && target.isActive()) {
+                    target.writeAndFlush(Unpooled.wrappedBuffer(data));
                 }
             }
 
@@ -126,6 +152,7 @@ public final class RelayTunnel {
         };
         this.webSocket = ws;
         if (!ws.connectBlocking(timeoutSeconds, TimeUnit.SECONDS)) {
+            shutdown();
             throw new InterruptedException("relay connect timed out");
         }
     }
@@ -170,7 +197,12 @@ public final class RelayTunnel {
         if (ws != null) {
             ws.close();
         }
-        Channel game = this.gameChannel.get();
+        Channel game;
+        synchronized (this.stateLock) {
+            game = this.gameChannel;
+            this.gameChannel = null;
+            this.pendingFromRelay.clear();
+        }
         if (game != null) {
             game.close();
         }
@@ -191,11 +223,24 @@ public final class RelayTunnel {
 
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
-            this.tunnel.gameChannel.set(ctx.channel());
-            // Flush anything the relay sent while we were still connecting.
-            byte[] frame;
-            while ((frame = this.tunnel.pendingFromRelay.poll()) != null) {
-                ctx.writeAndFlush(Unpooled.wrappedBuffer(frame));
+            if (this.tunnel.closed.get()) {
+                ctx.close();
+                return;
+            }
+            // Drain pending frames in strict FIFO order on the Netty event loop
+            // BEFORE publishing gameChannel so concurrent onMessage writes are
+            // guaranteed to queue after every buffered frame.
+            boolean wrote = false;
+            synchronized (this.tunnel.stateLock) {
+                byte[] frame;
+                while ((frame = this.tunnel.pendingFromRelay.pollFirst()) != null) {
+                    ctx.write(Unpooled.wrappedBuffer(frame));
+                    wrote = true;
+                }
+                this.tunnel.gameChannel = ctx.channel();
+            }
+            if (wrote) {
+                ctx.flush();
             }
         }
 

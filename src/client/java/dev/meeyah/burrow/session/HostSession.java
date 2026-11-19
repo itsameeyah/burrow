@@ -62,8 +62,9 @@ public final class HostSession {
         // channel — and our mixin captures the initializer during the bind.
         // Remember whether WE published, so stopping only unpublishes ours.
         if (!server.isPublished()) {
-            server.publishServer(MinecraftServer.MultiplayerScope.LAN, null, false, 0);
-            wePublished = true;
+            if (server.publishServer(MinecraftServer.MultiplayerScope.LAN, null, false, 0)) {
+                wePublished = true;
+            }
         }
         ChannelHandler initializer = capturedInitializer;
         if (initializer == null) {
@@ -110,13 +111,20 @@ public final class HostSession {
     }
 
     /** Belt-and-braces cleanup when the singleplayer world itself goes away. */
-    public static void ensureStopped() {
+    public static synchronized void ensureStopped() {
         if (hosting) {
             stop();
         } else {
             closeTunnels();
             closeLocalServer();
         }
+    }
+
+    /** Called on ServerLifecycleEvents.SERVER_STOPPING so stale state never leaks across worlds. */
+    public static synchronized void onServerStopping() {
+        ensureStopped();
+        capturedInitializer = null;
+        wePublished = false;
     }
 
     /** After a signaling reconnect, re-announce an ongoing hosting session. */
@@ -150,7 +158,7 @@ public final class HostSession {
             TUNNELS.put(roomId, tunnel); // register before connecting so stop() can reach it
             try {
                 tunnel.connectBlocking(10);
-            } catch (InterruptedException e) {
+            } catch (Throwable t) {
                 tunnel.close();
                 TUNNELS.remove(roomId);
             }

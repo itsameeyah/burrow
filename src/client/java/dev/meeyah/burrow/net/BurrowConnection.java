@@ -68,7 +68,15 @@ public final class BurrowConnection {
     }
 
     private void connectBlocking() {
-        WebSocketClient ws = new WebSocketClient(URI.create(BurrowClient.signalingUrl())) {
+        URI uri;
+        try {
+            uri = URI.create(BurrowClient.signalingUrl());
+        } catch (Exception e) {
+            LOG.warn("invalid Burrow server URL '{}'", BurrowClient.signalingUrl(), e);
+            status = Status.ERROR;
+            return;
+        }
+        WebSocketClient ws = new WebSocketClient(uri) {
             @Override
             public void onOpen(ServerHandshake handshake) {
                 attempts = 0;
@@ -167,7 +175,7 @@ public final class BurrowConnection {
                 state.replaceAll(friends, incoming, outgoing);
             }
             case Protocol.OP_PRESENCE_BATCH -> state.applyPresence(parsePresence(array(msg, "updates")));
-            case Protocol.OP_SESSION_STATE -> LOG.debug("session state: {}", msg);
+            case Protocol.OP_SESSION_STATE -> state.applySessions(parseSessions(array(msg, "sessions")));
             case Protocol.OP_INVITE_RECEIVED -> LOG.info("invite received: {}", msg);
             case Protocol.OP_JOIN_READY -> JoinFlow.onJoinReady(
                     uuid(msg, "host"),
@@ -244,6 +252,20 @@ public final class BurrowConnection {
         return out;
     }
 
+    private static List<FriendsState.SessionUpdate> parseSessions(JsonArray arr) {
+        List<FriendsState.SessionUpdate> out = new ArrayList<>();
+        for (JsonElement el : arr) {
+            if (!el.isJsonObject()) continue;
+            JsonObject o = el.getAsJsonObject();
+            UUID host = uuid(o, "host");
+            if (host == null) {
+                host = uuid(o, "uuid");
+            }
+            out.add(new FriendsState.SessionUpdate(host, bool(o, "active"), str(o, "worldName")));
+        }
+        return out;
+    }
+
     private static String strOr(JsonObject o, String member, String fallback) {
         String s = str(o, member);
         return s == null ? fallback : s;
@@ -261,8 +283,13 @@ public final class BurrowConnection {
         if (ws == null || !ws.isOpen()) {
             return false;
         }
-        ws.send(msg.toString());
-        return true;
+        try {
+            ws.send(msg.toString());
+            return true;
+        } catch (Exception e) {
+            LOG.debug("failed to send {}", msg.get("op"), e);
+            return false;
+        }
     }
 
     public void addFriend(String name) {

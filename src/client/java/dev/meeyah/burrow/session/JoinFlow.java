@@ -66,13 +66,18 @@ public final class JoinFlow {
             });
             try {
                 tunnel.connectBlocking(10);
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 tunnel.close();
+                BurrowClient.friends().setError("Couldn't connect to relay");
                 return;
             }
             ActiveJoin join = new ActiveJoin(tunnel);
             slot[0] = join;
+            ActiveJoin previous = active;
             active = join;
+            if (previous != null && !previous.consumed.get()) {
+                previous.tunnel.close();
+            }
             Minecraft mc = Minecraft.getInstance();
             mc.execute(() -> {
                 String fakeAddress = hostUuid + ".burrow";
