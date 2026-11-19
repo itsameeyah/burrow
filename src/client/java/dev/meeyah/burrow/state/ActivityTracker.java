@@ -2,22 +2,26 @@ package dev.meeyah.burrow.state;
 
 import dev.meeyah.burrow.BurrowClient;
 import dev.meeyah.burrow.config.BurrowConfig;
+import dev.meeyah.burrow.discord.DiscordRpc;
 import dev.meeyah.burrow.net.BurrowConnection;
+import dev.meeyah.burrow.session.HostSession;
+import dev.meeyah.burrow.session.HostWorldState;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
+import net.minecraft.client.server.IntegratedServer;
 
 import java.net.InetAddress;
 
 /**
  * Tracks what the local player is currently doing (menus, singleplayer,
  * Burrow friend world, saved server, Direct Connect, or local/LAN server)
- * and publishes privacy-respecting presence updates to Burrow.
+ * and publishes privacy-respecting presence updates to Burrow and Discord RPC.
  *
  * Rules:
- * - Incognito ON: hides all server/world info and reports "Playing Multiplayer"
- *   while in-game (or "Online" in menus).
+ * - Incognito ON: hides all server/world info (reports "Playing Multiplayer"
+ *   to Burrow friends while in-game and clears Discord Rich Presence).
  * - Saved Server List entry (non-local): reports custom server name + IP.
  * - Direct Connect (not in saved server list): reports "Playing Multiplayer"
  *   with no IP exposed.
@@ -25,6 +29,8 @@ import java.net.InetAddress;
  */
 public final class ActivityTracker {
     private static volatile boolean registered = false;
+    private static volatile String lastSessionKey = "";
+    private static volatile long sessionStartEpoch = DiscordRpc.nowEpochSeconds();
 
     private ActivityTracker() {}
 
@@ -45,43 +51,72 @@ public final class ActivityTracker {
         if (conn != null) {
             conn.updatePresence("idle", "", "", "");
         }
+        updateDiscord("idle", "In Menus", "Minecraft " + BurrowClient.minecraftVersion(), 0, 0);
     }
 
     public static void pushCurrent() {
         Minecraft mc = Minecraft.getInstance();
         BurrowConnection conn = BurrowClient.connection();
         BurrowConfig cfg = BurrowClient.config();
-        if (mc == null || conn == null || cfg == null) {
+        if (mc == null || cfg == null) {
             return;
         }
 
-        boolean inSingleplayer = mc.getSingleplayerServer() != null;
+        IntegratedServer sp = mc.getSingleplayerServer();
+        boolean inSingleplayer = sp != null;
         ServerData current = mc.getCurrentServer();
 
         if (!inSingleplayer && current == null) {
-            conn.updatePresence("idle", "", "", "");
+            if (conn != null) {
+                conn.updatePresence("idle", "", "", "");
+            }
+            updateDiscord("idle", "In Menus", "Minecraft " + BurrowClient.minecraftVersion(), 0, 0);
             return;
         }
 
         if (cfg.incognito) {
-            conn.updatePresence("multiplayer", "", "", "");
+            if (conn != null) {
+                conn.updatePresence("multiplayer", "", "", "");
+            }
+            DiscordRpc.clear();
             return;
         }
 
         if (inSingleplayer) {
-            conn.updatePresence("singleplayer", "", "", "");
+            if (conn != null) {
+                conn.updatePresence("singleplayer", "", "", "");
+            }
+            if (HostSession.isHosting()) {
+                HostWorldState ws = HostSession.worldState(sp);
+                String worldName = HostSession.safeWorldName(sp);
+                String accessLabel = ws != null ? ws.access().label() : "Friends Only";
+                String state = (ws != null && ws.locked()) ? accessLabel + " · Locked" : accessLabel;
+                int players = Math.max(1, sp.getPlayerCount());
+                int max = ws != null ? ws.maxPlayers() : 8;
+                updateDiscord("host:" + worldName, "Hosting " + worldName, state, players, max);
+            } else {
+                updateDiscord("sp:" + HostSession.safeWorldName(sp),
+                        "Playing Singleplayer", "Minecraft " + BurrowClient.minecraftVersion(), 0, 0);
+            }
             return;
         }
 
         String ip = current.ip == null ? "" : current.ip.trim();
         if (ip.endsWith(".burrow") || ip.contains(".burrow:")) {
             String label = current.name == null ? "" : current.name.trim();
-            conn.updatePresence("burrow", "", "", label);
+            if (conn != null) {
+                conn.updatePresence("burrow", "", "", label);
+            }
+            String details = label.isEmpty() ? "Playing with Friends" : "Playing in " + label;
+            updateDiscord("burrow:" + ip, details, "via Burrow", 0, 0);
             return;
         }
 
         if (current.isLan() || isLocalOrPrivateHost(ip)) {
-            conn.updatePresence("local", "", "", "");
+            if (conn != null) {
+                conn.updatePresence("local", "", "", "");
+            }
+            updateDiscord("local", "Playing on a local server", "Minecraft " + BurrowClient.minecraftVersion(), 0, 0);
             return;
         }
 
@@ -89,12 +124,66 @@ public final class ActivityTracker {
         ServerData saved = findInSavedServers(mc, ip);
         if (saved != null) {
             String displayName = (saved.name != null && !saved.name.isBlank()) ? saved.name.trim() : ip;
-            conn.updatePresence("server", displayName, ip, "");
+            if (conn != null) {
+                conn.updatePresence("server", displayName, ip, "");
+            }
+            updateDiscord("server:" + ip, "Playing on " + displayName, ip, 0, 0);
             return;
         }
 
         // Direct Connect: hide the IP.
-        conn.updatePresence("multiplayer", "", "", "");
+        if (conn != null) {
+            conn.updatePresence("multiplayer", "", "", "");
+        }
+        updateDiscord("mp", "Playing Multiplayer", "Minecraft " + BurrowClient.minecraftVersion(), 0, 0);
+    }
+
+    /** Re-sync Discord Rich Presence without re-sending Burrow signaling presence. */
+    public static void refreshDiscord() {
+        Minecraft mc = Minecraft.getInstance();
+        BurrowConfig cfg = BurrowClient.config();
+        if (mc == null || cfg == null) {
+            return;
+        }
+        if (cfg.incognito || !cfg.discordRichPresence) {
+            DiscordRpc.clear();
+            return;
+        }
+        IntegratedServer sp = mc.getSingleplayerServer();
+        if (sp != null) {
+            if (HostSession.isHosting()) {
+                HostWorldState ws = HostSession.worldState(sp);
+                String worldName = HostSession.safeWorldName(sp);
+                String accessLabel = ws != null ? ws.access().label() : "Friends Only";
+                String state = (ws != null && ws.locked()) ? accessLabel + " · Locked" : accessLabel;
+                int players = Math.max(1, sp.getPlayerCount());
+                int max = ws != null ? ws.maxPlayers() : 8;
+                updateDiscord("host:" + worldName, "Hosting " + worldName, state, players, max);
+            } else {
+                updateDiscord("sp:" + HostSession.safeWorldName(sp),
+                        "Playing Singleplayer", "Minecraft " + BurrowClient.minecraftVersion(), 0, 0);
+            }
+        }
+    }
+
+    private static void updateDiscord(String sessionKey, String details, String state, int partySize, int partyMax) {
+        BurrowConfig cfg = BurrowClient.config();
+        if (cfg != null && (cfg.incognito || !cfg.discordRichPresence)) {
+            DiscordRpc.clear();
+            return;
+        }
+        if (!sessionKey.equals(lastSessionKey)) {
+            lastSessionKey = sessionKey;
+            sessionStartEpoch = DiscordRpc.nowEpochSeconds();
+        }
+        DiscordRpc.setPresence(new DiscordRpc.Presence(
+                details,
+                state,
+                sessionStartEpoch,
+                partySize,
+                partyMax,
+                "Minecraft " + BurrowClient.minecraftVersion() + " · Burrow"
+        ));
     }
 
     private static ServerData findInSavedServers(Minecraft mc, String ip) {

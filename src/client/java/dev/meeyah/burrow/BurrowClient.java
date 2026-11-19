@@ -1,6 +1,7 @@
 package dev.meeyah.burrow;
 
 import dev.meeyah.burrow.config.BurrowConfig;
+import dev.meeyah.burrow.discord.DiscordRpc;
 import dev.meeyah.burrow.net.BurrowConnection;
 import dev.meeyah.burrow.session.HostPermissions;
 import dev.meeyah.burrow.session.HostSession;
@@ -31,13 +32,16 @@ public class BurrowClient implements ClientModInitializer {
         connection = new BurrowConnection(config, friends);
         HostPermissions.register();
         ActivityTracker.register();
+        DiscordRpc.start();
+        ActivityTracker.pushIdle();
 
         // Tear down hosting + stale server channel initializer whenever the
         // integrated server shuts down (world exit, quit to title, world switch).
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> HostSession.onServerStopping());
-        // Close sockets cleanly on game exit so Java-WebSocket threads never hang shutdown.
+        // Close sockets cleanly on game exit so background threads never hang shutdown.
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             HostSession.onServerStopping();
+            DiscordRpc.stop();
             connection.stop();
         });
 

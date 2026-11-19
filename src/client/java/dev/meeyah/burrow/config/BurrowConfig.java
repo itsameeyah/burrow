@@ -20,13 +20,16 @@ public class BurrowConfig {
     private static final Path PATH = FabricLoader.getInstance().getConfigDir().resolve("burrow.json");
 
     /** WebSocket URL of the Burrow signaling server. */
-    public String serverUrl = "ws://192.168.0.126:8787";
+    public String serverUrl = "wss://burrow.meeyah.dev";
 
     /** Connect to the signaling server automatically when the game starts. */
     public boolean connectAutomatically = true;
 
     /** Hide world/server details from friends and show only "Playing Multiplayer". */
     public boolean incognito = false;
+
+    /** Publish current world / server status to local Discord Rich Presence. */
+    public boolean discordRichPresence = true;
 
     public static BurrowConfig load() {
         BurrowConfig cfg = null;

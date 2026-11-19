@@ -3,6 +3,7 @@ package dev.meeyah.burrow.session;
 import dev.meeyah.burrow.BurrowClient;
 import dev.meeyah.burrow.net.BurrowConnection;
 import dev.meeyah.burrow.net.RelayTunnel;
+import dev.meeyah.burrow.state.ActivityTracker;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
@@ -152,6 +153,7 @@ public final class HostSession {
         if (connection != null) {
             connection.sessionClose();
         }
+        ActivityTracker.refreshDiscord();
     }
 
     /** Push updated settings/lock/bans/roles/player count to the Burrow server if hosting. */
@@ -297,6 +299,7 @@ public final class HostSession {
                     state.locked(), state.maxPlayers(), playerCount,
                     state.operatorUuids(), state.bannedUuids());
         }
+        ActivityTracker.refreshDiscord();
     }
 
     private static void closeTunnels() {
