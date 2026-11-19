@@ -74,7 +74,7 @@ public final class JoinFlow {
             ServerAddress address = ServerAddress.parseString(serverIp);
             String label = (serverName == null || serverName.isBlank()) ? serverIp : serverName;
             ServerData data = new ServerData(label, serverIp, ServerData.Type.OTHER);
-            ConnectScreen.startConnecting(mc.gui.screen(), mc, address, data, false, null);
+            ConnectScreen.startConnecting(mc.screen, mc, address, data, false, null);
         });
     }
 
@@ -112,7 +112,7 @@ public final class JoinFlow {
                         hostName == null ? "Friend's world" : hostName + " — " + worldName,
                         fakeAddress + ":" + 25565,
                         ServerData.Type.LAN);
-                ConnectScreen.startConnecting(mc.gui.screen(), mc, address, data, false, null);
+                ConnectScreen.startConnecting(mc.screen, mc, address, data, false, null);
             });
         }, "burrow-join");
         worker.setDaemon(true);

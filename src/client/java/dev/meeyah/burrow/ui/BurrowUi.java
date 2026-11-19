@@ -2,18 +2,17 @@ package dev.meeyah.burrow.ui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Shared vanilla-styled visual primitives for Burrow screens (Host World and
- * Friends) using Minecraft 26.2's built-in 9-slice panel, tab & button sprites.
+ * Friends) using Minecraft 1.21.5's built-in 9-slice panel, tab & button sprites.
  */
 public final class BurrowUi {
     // Unified modal geometry so Friends, Requests, Host World, and Invite Friend
@@ -29,13 +28,13 @@ public final class BurrowUi {
     public static final int CONTENT_H = 136;
     public static final int FOOTER_Y = 203;
 
-    public static final Identifier PANEL_BG = Identifier.withDefaultNamespace("friends/background");
-    public static final Identifier TAB_IDLE = Identifier.withDefaultNamespace("widget/tab");
-    public static final Identifier TAB_SELECTED = Identifier.withDefaultNamespace("widget/tab_selected");
-    public static final Identifier TAB_HOVER = Identifier.withDefaultNamespace("widget/tab_highlighted");
-    public static final Identifier TAB_SELECTED_HOVER = Identifier.withDefaultNamespace("widget/tab_selected_highlighted");
-    public static final Identifier BUTTON_IDLE = Identifier.withDefaultNamespace("widget/button");
-    public static final Identifier BUTTON_HOVER = Identifier.withDefaultNamespace("widget/button_highlighted");
+    public static final ResourceLocation PANEL_BG = ResourceLocation.withDefaultNamespace("popup/background");
+    public static final ResourceLocation TAB_IDLE = ResourceLocation.withDefaultNamespace("widget/tab");
+    public static final ResourceLocation TAB_SELECTED = ResourceLocation.withDefaultNamespace("widget/tab_selected");
+    public static final ResourceLocation TAB_HOVER = ResourceLocation.withDefaultNamespace("widget/tab_highlighted");
+    public static final ResourceLocation TAB_SELECTED_HOVER = ResourceLocation.withDefaultNamespace("widget/tab_selected_highlighted");
+    public static final ResourceLocation BUTTON_IDLE = ResourceLocation.withDefaultNamespace("widget/button");
+    public static final ResourceLocation BUTTON_HOVER = ResourceLocation.withDefaultNamespace("widget/button_highlighted");
 
     // Full-alpha ARGB palette tuned for vanilla dark panels.
     public static final int TEXT_PRIMARY = 0xFFFFFFFF;
@@ -64,19 +63,19 @@ public final class BurrowUi {
     private BurrowUi() {}
 
     /** Outer vanilla 9-slice modal panel (uses the sprite's own clean border, no extra halo). */
-    public static void drawModalPanel(GuiGraphicsExtractor g, int x, int y, int w, int h) {
-        g.blitSprite(RenderPipelines.GUI_TEXTURED, PANEL_BG, x, y, w, h);
+    public static void drawModalPanel(GuiGraphics g, int x, int y, int w, int h) {
+        g.blitSprite(RenderType::guiTextured, PANEL_BG, x, y, w, h);
     }
 
     /** Crisp flat dark recessed container inside a modal panel. */
-    public static void drawInsetBox(GuiGraphicsExtractor g, int x, int y, int w, int h) {
+    public static void drawInsetBox(GuiGraphics g, int x, int y, int w, int h) {
         g.fill(x, y, x + w, y + h, INSET_BG);
-        g.outline(x, y, w, h, INSET_BORDER);
+        g.renderOutline(x, y, w, h, INSET_BORDER);
     }
 
     /** Small pill badge with leading status dot (aligned to rightX). */
     public static void drawStatusPill(
-            GuiGraphicsExtractor g,
+            GuiGraphics g,
             Font font,
             int rightX,
             int y,
@@ -88,22 +87,22 @@ public final class BurrowUi {
         int pillH = 16;
         int x = rightX - pillW;
         g.fill(x, y, x + pillW, y + pillH, 0xFF16161B);
-        g.outline(x, y, pillW, pillH, 0xFF0B0B0E);
+        g.renderOutline(x, y, pillW, pillH, 0xFF0B0B0E);
         g.fill(x + 6, y + 6, x + 10, y + 10, dotColor);
-        g.text(font, text, x + 14, y + 4, TEXT_PRIMARY, false);
+        g.drawString(font, text, x + 14, y + 4, TEXT_PRIMARY, false);
     }
 
     /** Compact colored tag pill at crisp native 1.0x pixel font scale with balanced padding. */
-    public static int drawTagPill(GuiGraphicsExtractor g, Font font, int x, int y, String label, int color) {
+    public static int drawTagPill(GuiGraphics g, Font font, int x, int y, String label, int color) {
         int textW = font.width(label);
         int w = textW + 6;
         int h = 11;
         int bg = (color & 0x00FFFFFF) | 0x28000000;
         int border = (color & 0x00FFFFFF) | 0x55000000;
         g.fill(x, y, x + w, y + h, bg);
-        g.outline(x, y, w, h, border);
+        g.renderOutline(x, y, w, h, border);
         // Native 1.0x glyph (7px tall) centered cleanly inside 11px height: 2px top, 2px bottom, 3px left/right
-        g.text(font, label, x + 3, y + 2, color, false);
+        g.drawString(font, label, x + 3, y + 2, color, false);
         return w;
     }
 
@@ -119,19 +118,19 @@ public final class BurrowUi {
         }
 
         @Override
-        protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-            Identifier sprite = this.selected
+        protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+            ResourceLocation sprite = this.selected
                     ? (this.isHoveredOrFocused() ? TAB_SELECTED_HOVER : TAB_SELECTED)
                     : (this.isHoveredOrFocused() ? TAB_HOVER : TAB_IDLE);
-            g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, getX(), getY(), getWidth(), getHeight());
+            g.blitSprite(RenderType::guiTextured, sprite, getX(), getY(), getWidth(), getHeight());
             Font font = Minecraft.getInstance().font;
             int color = this.selected ? TEXT_PRIMARY : (this.isHoveredOrFocused() ? 0xFFE8E8EE : TEXT_SECONDARY);
             int textY = getY() + (getHeight() - 8) / 2 + (this.selected ? 0 : 1);
-            g.centeredText(font, getMessage(), getX() + getWidth() / 2, textY, color);
+            g.drawCenteredString(font, getMessage(), getX() + getWidth() / 2, textY, color);
         }
 
         @Override
-        public void onClick(MouseButtonEvent event, boolean doubleClick) {
+        public void onClick(double mouseX, double mouseY) {
             if (!this.selected) {
                 playButtonClickSound(Minecraft.getInstance().getSoundManager());
                 this.onPress.run();
@@ -160,9 +159,9 @@ public final class BurrowUi {
         }
 
         @Override
-        protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-            Identifier sprite = this.isHoveredOrFocused() ? BUTTON_HOVER : BUTTON_IDLE;
-            g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, getX(), getY(), getWidth(), getHeight());
+        protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+            ResourceLocation sprite = this.isHoveredOrFocused() ? BUTTON_HOVER : BUTTON_IDLE;
+            g.blitSprite(RenderType::guiTextured, sprite, getX(), getY(), getWidth(), getHeight());
 
             int left = getX();
             int top = getY();
@@ -196,7 +195,7 @@ public final class BurrowUi {
         }
 
         @Override
-        public void onClick(MouseButtonEvent event, boolean doubleClick) {
+        public void onClick(double mouseX, double mouseY) {
             playButtonClickSound(Minecraft.getInstance().getSoundManager());
             this.onToggle.run();
         }

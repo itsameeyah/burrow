@@ -55,6 +55,15 @@ public abstract class JoinMultiplayerScreenMixin {
         }
     }
 
+    @Inject(method = "joinSelectedServer", at = @At("HEAD"), cancellable = true)
+    private void burrow$joinSelectedBurrowWorld(CallbackInfo ci) {
+        if (this.serverSelectionList != null
+                && this.serverSelectionList.getSelected() instanceof BurrowMultiplayerWorlds.WorldEntry we) {
+            we.join();
+            ci.cancel();
+        }
+    }
+
     @Inject(method = "onSelectedChange", at = @At("TAIL"))
     private void burrow$guardSelection(CallbackInfo ci) {
         if (this.serverSelectionList == null || this.selectButton == null) {

@@ -7,7 +7,7 @@ import dev.meeyah.burrow.session.HostWorldState;
 import dev.meeyah.burrow.state.FriendsState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
@@ -15,7 +15,6 @@ import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -156,8 +155,9 @@ public class HostWorldScreen extends Screen {
 
         this.settingLabels.add(new RowLabel("Who Can Join", labelX, rowY + 6));
         addRenderableWidget(CycleButton.<HostWorldState.AccessMode>builder(
-                        m -> Component.literal(m.label()), state.access())
+                        m -> Component.literal(m.label()))
                 .withValues(HostWorldState.AccessMode.values())
+                .withInitialValue(state.access())
                 .displayOnlyValue()
                 .withTooltip(m -> Tooltip.create(Component.literal(accessTooltip(m))))
                 .create(ctrlX, rowY, ctrlW, 20, Component.literal("Who Can Join"), (btn, val) -> {
@@ -168,8 +168,9 @@ public class HostWorldScreen extends Screen {
 
         this.settingLabels.add(new RowLabel("Default Role", labelX, rowY + 6));
         addRenderableWidget(CycleButton.<HostWorldState.Role>builder(
-                        r -> Component.literal(r.label()), state.defaultRole())
+                        r -> Component.literal(r.label()))
                 .withValues(HostWorldState.Role.values())
+                .withInitialValue(state.defaultRole())
                 .displayOnlyValue()
                 .withTooltip(r -> Tooltip.create(Component.literal(roleTooltip(r))))
                 .create(ctrlX, rowY, ctrlW, 20, Component.literal("Default Role"), (btn, val) -> {
@@ -179,8 +180,9 @@ public class HostWorldScreen extends Screen {
 
         this.settingLabels.add(new RowLabel("Who Can Invite", labelX, rowY + 6));
         addRenderableWidget(CycleButton.<HostWorldState.InvitePerm>builder(
-                        p -> Component.literal(p.label()), state.invitePerm())
+                        p -> Component.literal(p.label()))
                 .withValues(HostWorldState.InvitePerm.values())
+                .withInitialValue(state.invitePerm())
                 .displayOnlyValue()
                 .withTooltip(p -> Tooltip.create(Component.literal("Controls who can send world invites.")))
                 .create(ctrlX, rowY, ctrlW, 20, Component.literal("Who Can Invite"), (btn, val) -> {
@@ -218,8 +220,8 @@ public class HostWorldScreen extends Screen {
     ) {
         List<ServerPlayer> ordered = new ArrayList<>(players);
         ordered.sort((a, b) -> {
-            boolean aHost = server.isSingleplayerOwner(a.nameAndId());
-            boolean bHost = server.isSingleplayerOwner(b.nameAndId());
+            boolean aHost = server.isSingleplayerOwner(a.getGameProfile());
+            boolean bHost = server.isSingleplayerOwner(b.getGameProfile());
             if (aHost != bHost) return aHost ? -1 : 1;
             return a.getScoreboardName().compareToIgnoreCase(b.getScoreboardName());
         });
@@ -239,7 +241,7 @@ public class HostWorldScreen extends Screen {
         if (hosting) {
             addRenderableWidget(Button.builder(Component.literal("+ Invite"), b -> {
                 if (this.minecraft != null) {
-                    this.minecraft.gui.setScreen(new InviteFriendScreen(this));
+                    this.minecraft.setScreen(new InviteFriendScreen(this));
                 }
             }).bounds(innerX + innerW - 64, this.contentY + 6, 64, 16).build());
         }
@@ -254,7 +256,7 @@ public class HostWorldScreen extends Screen {
         for (ServerPlayer p : ordered.subList(from, to)) {
             UUID uuid = p.getUUID();
             String name = p.getScoreboardName();
-            boolean isHost = server.isSingleplayerOwner(p.nameAndId());
+            boolean isHost = server.isSingleplayerOwner(p.getGameProfile());
             boolean expanded = !isHost && uuid.equals(this.expandedPlayer);
 
             String roleLabel = isHost ? "Host" : state.roleOf(uuid).label();
@@ -297,8 +299,9 @@ public class HostWorldScreen extends Screen {
 
         HostWorldState.Role current = state.roleOf(uuid);
         CycleButton<HostWorldState.Role> roleBtn = CycleButton.<HostWorldState.Role>builder(
-                        r -> Component.literal("Role: " + r.label()), current)
+                        r -> Component.literal("Role: " + r.label()))
                 .withValues(HostWorldState.Role.values())
+                .withInitialValue(current)
                 .displayOnlyValue()
                 .create(curX, btnY, 96, 18, Component.literal("Role"), (btn, val) -> {
                     HostPermissions.setPlayerRole(server, uuid, val);
@@ -379,8 +382,8 @@ public class HostWorldScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-        super.extractBackground(g, mouseX, mouseY, partialTick);
+    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        super.renderBackground(g, mouseX, mouseY, partialTick);
 
         BurrowUi.drawModalPanel(g, this.panelX, this.panelY, PANEL_W, PANEL_H);
 
@@ -390,9 +393,9 @@ public class HostWorldScreen extends Screen {
         String title = hosting ? "Host Settings" : "Host World";
         String worldName = server != null ? HostSession.safeWorldName(server) : "";
 
-        g.text(font, title, this.contentX, this.panelY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
+        g.drawString(font, title, this.contentX, this.panelY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
         if (!worldName.isEmpty()) {
-            g.text(font, worldName, this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
+            g.drawString(font, worldName, this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
         }
 
         if (server != null) {
@@ -414,22 +417,22 @@ public class HostWorldScreen extends Screen {
         BurrowUi.drawInsetBox(g, this.contentX, this.contentY, this.contentW, CONTENT_H);
 
         for (RowLabel lbl : this.settingLabels) {
-            g.text(font, lbl.text(), lbl.x(), lbl.y(), BurrowUi.TEXT_PRIMARY, false);
+            g.drawString(font, lbl.text(), lbl.x(), lbl.y(), BurrowUi.TEXT_PRIMARY, false);
         }
 
         if (this.playersSubHeader != null) {
-            g.text(font, this.playersSubHeader, this.contentX + 8, this.contentY + 10, BurrowUi.TEXT_SECONDARY, false);
+            g.drawString(font, this.playersSubHeader, this.contentX + 8, this.contentY + 10, BurrowUi.TEXT_SECONDARY, false);
         }
 
         for (BanRowDisplay row : this.banRows) {
             g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), BurrowUi.CARD_BG);
-            g.outline(row.x(), row.y(), row.w(), row.h(), BurrowUi.CARD_BORDER);
+            g.renderOutline(row.x(), row.y(), row.w(), row.h(), BurrowUi.CARD_BORDER);
             PlayerHeads.draw(g, row.uuid(), row.name(), row.x() + 5, row.y() + 4, 20);
-            g.text(font, row.name(), row.x() + 31, row.y() + 10, BurrowUi.TEXT_PRIMARY, true);
+            g.drawString(font, row.name(), row.x() + 31, row.y() + 10, BurrowUi.TEXT_PRIMARY, true);
         }
 
         if (this.emptyMessage != null) {
-            g.centeredText(font, this.emptyMessage,
+            g.drawCenteredString(font, this.emptyMessage,
                     this.contentX + this.contentW / 2,
                     this.contentY + CONTENT_H / 2 - 4,
                     BurrowUi.TEXT_MUTED);
@@ -460,7 +463,7 @@ public class HostWorldScreen extends Screen {
     @Override
     public void onClose() {
         if (this.parent != null && this.minecraft != null) {
-            this.minecraft.gui.setScreen(this.parent);
+            this.minecraft.setScreen(this.parent);
         } else {
             super.onClose();
         }
@@ -550,7 +553,7 @@ public class HostWorldScreen extends Screen {
         }
 
         @Override
-        protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+        protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
             int x = getX();
             int y = getY();
             int w = getWidth();
@@ -560,31 +563,31 @@ public class HostWorldScreen extends Screen {
                     ? BurrowUi.CARD_SELECTED
                     : (this.interactive && this.isHovered ? BurrowUi.CARD_HOVER : BurrowUi.CARD_BG);
             g.fill(x, y, x + w, y + h, bg);
-            g.outline(x, y, w, h, this.expanded ? BurrowUi.CARD_BORDER_ACTIVE : BurrowUi.CARD_BORDER);
+            g.renderOutline(x, y, w, h, this.expanded ? BurrowUi.CARD_BORDER_ACTIVE : BurrowUi.CARD_BORDER);
 
             if (this.expanded) {
                 g.fill(x, y + h, x + w, y + h + 24, BurrowUi.DRAWER_BG);
-                g.outline(x, y + h - 1, w, 25, BurrowUi.CARD_BORDER_ACTIVE);
+                g.renderOutline(x, y + h - 1, w, 25, BurrowUi.CARD_BORDER_ACTIVE);
             }
 
             PlayerHeads.draw(g, this.uuid, this.name, x + 5, y + 5, 20);
 
             Font font = Minecraft.getInstance().font;
             int textX = x + 31;
-            g.text(font, this.name, textX, y + 5, BurrowUi.TEXT_PRIMARY, true);
+            g.drawString(font, this.name, textX, y + 5, BurrowUi.TEXT_PRIMARY, true);
             int nameW = font.width(this.name);
             BurrowUi.drawTagPill(g, font, textX + nameW + 5, y + 4, this.roleLabel, this.roleColor);
-            g.text(font, this.subtitle, textX, y + 17, BurrowUi.TEXT_SECONDARY, false);
+            g.drawString(font, this.subtitle, textX, y + 17, BurrowUi.TEXT_SECONDARY, false);
 
             if (this.interactive) {
                 String chevron = this.expanded ? "v" : ">";
                 int chevColor = this.isHovered || this.expanded ? BurrowUi.TEXT_PRIMARY : BurrowUi.TEXT_MUTED;
-                g.text(font, chevron, x + w - 12, y + 11, chevColor, false);
+                g.drawString(font, chevron, x + w - 12, y + 11, chevColor, false);
             }
         }
 
         @Override
-        public void onClick(MouseButtonEvent event, boolean doubleClick) {
+        public void onClick(double mouseX, double mouseY) {
             if (this.interactive) {
                 playButtonClickSound(Minecraft.getInstance().getSoundManager());
                 this.onToggle.run();
@@ -651,21 +654,21 @@ public class HostWorldScreen extends Screen {
         }
 
         @Override
-        public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-            super.extractBackground(g, mouseX, mouseY, partialTick);
+        public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+            super.renderBackground(g, mouseX, mouseY, partialTick);
             BurrowUi.drawModalPanel(g, this.modalX, this.modalY, BurrowUi.PANEL_W, BurrowUi.PANEL_H);
-            g.text(this.font, "Invite Friend to World", this.innerX, this.modalY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
-            g.text(this.font, "Invites expire after 30 seconds", this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
+            g.drawString(this.font, "Invite Friend to World", this.innerX, this.modalY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
+            g.drawString(this.font, "Invites expire after 30 seconds", this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
             BurrowUi.drawInsetBox(g, this.innerX, this.modalY + BurrowUi.TABS_Y, this.innerW, 155);
 
             for (BanRowDisplay row : this.rows) {
                 g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), BurrowUi.CARD_BG);
-                g.outline(row.x(), row.y(), row.w(), row.h(), BurrowUi.CARD_BORDER);
+                g.renderOutline(row.x(), row.y(), row.w(), row.h(), BurrowUi.CARD_BORDER);
                 PlayerHeads.draw(g, row.uuid(), row.name(), row.x() + 5, row.y() + 4, 20);
-                g.text(this.font, row.name(), row.x() + 31, row.y() + 10, BurrowUi.TEXT_PRIMARY, true);
+                g.drawString(this.font, row.name(), row.x() + 31, row.y() + 10, BurrowUi.TEXT_PRIMARY, true);
             }
             if (this.emptyMsg != null) {
-                g.centeredText(this.font, this.emptyMsg,
+                g.drawCenteredString(this.font, this.emptyMsg,
                         this.modalX + BurrowUi.PANEL_W / 2, this.modalY + BurrowUi.TABS_Y + 74, BurrowUi.TEXT_MUTED);
             }
         }
@@ -673,7 +676,7 @@ public class HostWorldScreen extends Screen {
         @Override
         public void onClose() {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(this.parent);
+                this.minecraft.setScreen(this.parent);
             }
         }
     }

@@ -1,23 +1,49 @@
 package dev.meeyah.burrow.mixin;
 
 import dev.meeyah.burrow.session.HostSession;
+import dev.meeyah.burrow.ui.BurrowFriendsScreen;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Repurposes the Pause Menu's "Open to LAN / Multiplayer Options" button as
- * Burrow's "Host World" control panel.
+ * Repurposes the Pause Menu's "Open to LAN" button as Burrow's "Host World" /
+ * "Host Settings" control panel, and adds a "Friends" button aligned with the
+ * vanilla Pause Menu grid.
  */
 @Mixin(PauseScreen.class)
-public abstract class PauseScreenMixin {
+public abstract class PauseScreenMixin extends Screen {
     @Shadow
     @Final
-    private static Component MULTIPLAYER_OPTIONS;
+    private static Component SHARE_TO_LAN;
+
+    @Shadow
+    private Button disconnectButton;
+
+    protected PauseScreenMixin() {
+        super(Component.empty());
+    }
+
+    @Redirect(
+            method = "createPauseMenu",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/server/IntegratedServer;isPublished()Z"
+            )
+    )
+    private boolean burrow$keepHostButtonVisible(IntegratedServer server) {
+        return false;
+    }
 
     @ModifyArg(
             method = "createPauseMenu",
@@ -28,9 +54,25 @@ public abstract class PauseScreenMixin {
             index = 0
     )
     private Component burrow$relabelHostWorldButton(Component label) {
-        if (label == MULTIPLAYER_OPTIONS) {
+        if (label == SHARE_TO_LAN) {
             return Component.literal(HostSession.isHosting() ? "Host Settings" : "Host World");
         }
         return label;
+    }
+
+    @Inject(method = "createPauseMenu", at = @At("TAIL"))
+    private void burrow$addFriendsButton(CallbackInfo ci) {
+        if (this.disconnectButton == null) {
+            return;
+        }
+        int x = this.disconnectButton.getX();
+        int y = this.disconnectButton.getY();
+        int w = this.disconnectButton.getWidth();
+        this.disconnectButton.setY(y + 24);
+        this.addRenderableWidget(Button.builder(Component.literal("Friends"), b -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(new BurrowFriendsScreen(this));
+            }
+        }).bounds(x, y, w, 20).build());
     }
 }

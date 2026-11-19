@@ -43,7 +43,7 @@ public final class BurrowToasts {
         Component title = Component.literal("World Invite — " + world);
         Component body = Component.literal(sender + " invited you · [Y] Join");
         mc.execute(() -> SystemToast.add(
-                mc.gui.toastManager(),
+                mc.getToastManager(),
                 new SystemToast.SystemToastId(TOAST_DISPLAY_MS),
                 title,
                 body));
@@ -66,7 +66,7 @@ public final class BurrowToasts {
                         ? fromName + " wants to join · [Y] Invite"
                         : fromName + " wants to join · Press O");
         mc.execute(() -> SystemToast.add(
-                mc.gui.toastManager(),
+                mc.getToastManager(),
                 new SystemToast.SystemToastId(TOAST_DISPLAY_MS),
                 title,
                 body));
@@ -85,7 +85,7 @@ public final class BurrowToasts {
         Component title = Component.literal("Friend Request");
         Component body = Component.literal(fromName + " wants to be friends · [Y] Accept");
         mc.execute(() -> SystemToast.add(
-                mc.gui.toastManager(),
+                mc.getToastManager(),
                 new SystemToast.SystemToastId(TOAST_DISPLAY_MS),
                 title,
                 body));
@@ -95,7 +95,7 @@ public final class BurrowToasts {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.gui == null) return;
         mc.execute(() -> SystemToast.add(
-                mc.gui.toastManager(),
+                mc.getToastManager(),
                 new SystemToast.SystemToastId(3_500L),
                 Component.literal(title),
                 Component.literal(body)));

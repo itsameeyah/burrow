@@ -11,8 +11,9 @@ import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalServerChannel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.network.Connection;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.EventLoopGroupHolder;
+import net.minecraft.util.HttpUtil;
 import org.jetbrains.annotations.Nullable;
 
 import java.net.SocketAddress;
@@ -34,7 +35,6 @@ public final class HostSession {
     private static volatile @Nullable SocketAddress localEndpoint;
     private static volatile @Nullable MinecraftServer stateServer;
     private static volatile @Nullable HostWorldState currentState;
-    private static volatile boolean wePublished;
     private static volatile boolean hosting;
     /** One tunnel per relay room (one per joining friend). */
     private static final Map<String, RelayTunnel> TUNNELS = new ConcurrentHashMap<>();
@@ -81,12 +81,10 @@ public final class HostSession {
             return;
         }
 
-        // Publish to the LAN scope so the game creates its real server
-        // channel — and our mixin captures the initializer during the bind.
+        // Publish to LAN so the game creates its real server channel — and our
+        // mixin captures the initializer during the bind.
         if (!server.isPublished()) {
-            if (server.publishServer(MinecraftServer.MultiplayerScope.LAN, null, false, 0)) {
-                wePublished = true;
-            }
+            server.publishServer(null, false, HttpUtil.getAvailablePort());
         }
         ChannelHandler initializer = capturedInitializer;
         if (initializer == null) {
@@ -95,7 +93,7 @@ public final class HostSession {
 
         if (localServer == null || !localServer.isActive()) {
             localServer = new ServerBootstrap()
-                    .group(EventLoopGroupHolder.local().eventLoopGroup())
+                    .group(Connection.LOCAL_WORKER_GROUP.get())
                     .channel(LocalServerChannel.class)
                     .childHandler(initializer)
                     .localAddress(new LocalAddress(HOST_ADDRESS_ID))
@@ -197,7 +195,6 @@ public final class HostSession {
     public static synchronized void onServerStopping() {
         ensureStopped();
         capturedInitializer = null;
-        wePublished = false;
         stateServer = null;
         currentState = null;
     }
@@ -316,12 +313,6 @@ public final class HostSession {
         localEndpoint = null;
         if (server != null) {
             server.close();
-        }
-        Minecraft mc = Minecraft.getInstance();
-        IntegratedServer integrated = mc == null ? null : mc.getSingleplayerServer();
-        if (wePublished && integrated != null && integrated.isPublished()) {
-            wePublished = false;
-            integrated.unpublishServer();
         }
     }
 

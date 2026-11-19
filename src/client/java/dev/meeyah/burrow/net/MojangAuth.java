@@ -9,7 +9,6 @@ import com.mojang.authlib.exceptions.UserBannedException;
 import com.mojang.authlib.minecraft.MinecraftSessionService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.User;
-import net.minecraft.server.Services;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,8 +90,7 @@ public final class MojangAuth {
                 return;
             }
 
-            Services services = mc.services();
-            MinecraftSessionService sessionService = services != null ? services.sessionService() : null;
+            MinecraftSessionService sessionService = mc.getMinecraftSessionService();
             if (sessionService == null) {
                 fail(onFailure, "Minecraft session service is unavailable.");
                 return;

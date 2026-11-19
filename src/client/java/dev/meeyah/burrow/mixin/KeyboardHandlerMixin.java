@@ -8,7 +8,6 @@ import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.client.gui.screens.inventory.BookEditScreen;
-import net.minecraft.client.input.KeyEvent;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -30,14 +29,14 @@ public abstract class KeyboardHandlerMixin {
     private Minecraft minecraft;
 
     @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
-    private void burrow$handleToastQuickAccept(long window, int action, KeyEvent event, CallbackInfo ci) {
-        if (action != GLFW.GLFW_PRESS || event.key() != GLFW.GLFW_KEY_Y || event.modifiers() != 0) {
+    private void burrow$handleToastQuickAccept(long window, int key, int scanCode, int action, int modifiers, CallbackInfo ci) {
+        if (action != GLFW.GLFW_PRESS || key != GLFW.GLFW_KEY_Y || modifiers != 0) {
             return;
         }
         if (!BurrowToasts.hasActivePrompt()) {
             return;
         }
-        Screen screen = this.minecraft.gui == null ? null : this.minecraft.gui.screen();
+        Screen screen = this.minecraft.screen;
         if (screen != null) {
             if (screen instanceof ChatScreen
                     || screen instanceof AbstractSignEditScreen
