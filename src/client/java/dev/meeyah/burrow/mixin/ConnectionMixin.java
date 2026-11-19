@@ -2,12 +2,13 @@ package dev.meeyah.burrow.mixin;
 
 import dev.meeyah.burrow.net.RelayTunnel;
 import dev.meeyah.burrow.session.JoinFlow;
+import io.netty.bootstrap.AbstractBootstrap;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.local.LocalChannel;
 import net.minecraft.network.Connection;
-import net.minecraft.server.network.EventLoopGroupHolder;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -21,15 +22,15 @@ import java.net.InetSocketAddress;
 /**
  * While a Burrow join is active and targeting loopback (the address our
  * resolver rewrite produced), atomically claim the tunnel at connect HEAD
- * and route eventLoopGroup(), channelCls(), and Bootstrap.connect() through
- * it together — so a non-loopback connect can never end up with a mismatched
- * LocalChannel bootstrap, and a cancelled/stale join can never hijack a
- * normal server, LAN or Realms connection.
+ * and route Bootstrap.group(), Bootstrap.channel(), and Bootstrap.connect()
+ * through it together — so a non-loopback connect can never end up with a
+ * mismatched LocalChannel bootstrap, and a cancelled/stale join can never
+ * hijack a normal server, LAN or Realms connection.
  */
 @Mixin(Connection.class)
 public abstract class ConnectionMixin {
     @Unique
-    private static final String CONNECT = "connect(Ljava/net/InetSocketAddress;Lnet/minecraft/server/network/EventLoopGroupHolder;Lnet/minecraft/network/Connection;)Lio/netty/channel/ChannelFuture;";
+    private static final String CONNECT = "connect(Ljava/net/InetSocketAddress;ZLnet/minecraft/network/Connection;)Lio/netty/channel/ChannelFuture;";
 
     @Unique
     private static final ThreadLocal<RelayTunnel> BURROW_TUNNEL = new ThreadLocal<>();
@@ -37,7 +38,7 @@ public abstract class ConnectionMixin {
     @Inject(method = CONNECT, at = @At("HEAD"))
     private static void burrow$claimTunnelIfLoopback(
             InetSocketAddress address,
-            EventLoopGroupHolder holder,
+            boolean useEpollIfAvailable,
             Connection connection,
             CallbackInfoReturnable<ChannelFuture> cir
     ) {
@@ -54,26 +55,34 @@ public abstract class ConnectionMixin {
             method = CONNECT,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/server/network/EventLoopGroupHolder;eventLoopGroup()Lio/netty/channel/EventLoopGroup;"
+                    target = "Lio/netty/bootstrap/Bootstrap;group(Lio/netty/channel/EventLoopGroup;)Lio/netty/bootstrap/AbstractBootstrap;"
             )
     )
-    private static EventLoopGroup burrow$useLocalGroup(EventLoopGroupHolder holder) {
-        return BURROW_TUNNEL.get() != null
-                ? EventLoopGroupHolder.local().eventLoopGroup()
-                : holder.eventLoopGroup();
+    private static AbstractBootstrap<Bootstrap, Channel> burrow$useLocalGroup(
+            Bootstrap bootstrap,
+            EventLoopGroup group
+    ) {
+        EventLoopGroup targetGroup = BURROW_TUNNEL.get() != null
+                ? Connection.LOCAL_WORKER_GROUP.get()
+                : group;
+        return bootstrap.group(targetGroup);
     }
 
     @Redirect(
             method = CONNECT,
             at = @At(
                     value = "INVOKE",
-                    target = "Lnet/minecraft/server/network/EventLoopGroupHolder;channelCls()Ljava/lang/Class;"
+                    target = "Lio/netty/bootstrap/Bootstrap;channel(Ljava/lang/Class;)Lio/netty/bootstrap/AbstractBootstrap;"
             )
     )
-    private static Class<? extends Channel> burrow$useLocalChannel(EventLoopGroupHolder holder) {
-        return BURROW_TUNNEL.get() != null
-                ? EventLoopGroupHolder.local().channelCls()
-                : holder.channelCls();
+    private static AbstractBootstrap<Bootstrap, Channel> burrow$useLocalChannel(
+            Bootstrap bootstrap,
+            Class<? extends Channel> channelCls
+    ) {
+        Class<? extends Channel> targetCls = BURROW_TUNNEL.get() != null
+                ? LocalChannel.class
+                : channelCls;
+        return bootstrap.channel(targetCls);
     }
 
     @Redirect(
@@ -95,7 +104,7 @@ public abstract class ConnectionMixin {
     @Inject(method = CONNECT, at = @At("RETURN"))
     private static void burrow$clearTunnel(
             InetSocketAddress address,
-            EventLoopGroupHolder holder,
+            boolean useEpollIfAvailable,
             Connection connection,
             CallbackInfoReturnable<ChannelFuture> cir
     ) {

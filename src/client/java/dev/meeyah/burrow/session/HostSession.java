@@ -11,8 +11,9 @@ import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalServerChannel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.server.IntegratedServer;
+import net.minecraft.network.Connection;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.EventLoopGroupHolder;
+import net.minecraft.util.HttpUtil;
 import org.jetbrains.annotations.Nullable;
 
 import java.net.SocketAddress;
@@ -52,6 +53,10 @@ public final class HostSession {
         return hosting;
     }
 
+    public static boolean hasWePublished() {
+        return wePublished;
+    }
+
     /** Lazy-loaded per-world HostWorldState for the active integrated server. */
     public static synchronized @Nullable HostWorldState worldState(@Nullable MinecraftServer server) {
         if (server == null) {
@@ -81,10 +86,10 @@ public final class HostSession {
             return;
         }
 
-        // Publish to the LAN scope so the game creates its real server
-        // channel — and our mixin captures the initializer during the bind.
+        // Publish to LAN so the game creates its real server channel — and our
+        // mixin captures the initializer during the bind.
         if (!server.isPublished()) {
-            if (server.publishServer(MinecraftServer.MultiplayerScope.LAN, null, false, 0)) {
+            if (server.publishServer(null, false, HttpUtil.getAvailablePort())) {
                 wePublished = true;
             }
         }
@@ -95,7 +100,7 @@ public final class HostSession {
 
         if (localServer == null || !localServer.isActive()) {
             localServer = new ServerBootstrap()
-                    .group(EventLoopGroupHolder.local().eventLoopGroup())
+                    .group(Connection.LOCAL_WORKER_GROUP.get())
                     .channel(LocalServerChannel.class)
                     .childHandler(initializer)
                     .localAddress(new LocalAddress(HOST_ADDRESS_ID))
@@ -316,12 +321,6 @@ public final class HostSession {
         localEndpoint = null;
         if (server != null) {
             server.close();
-        }
-        Minecraft mc = Minecraft.getInstance();
-        IntegratedServer integrated = mc == null ? null : mc.getSingleplayerServer();
-        if (wePublished && integrated != null && integrated.isPublished()) {
-            wePublished = false;
-            integrated.unpublishServer();
         }
     }
 

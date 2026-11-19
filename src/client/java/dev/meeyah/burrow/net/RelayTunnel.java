@@ -11,7 +11,7 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.local.LocalAddress;
 import io.netty.channel.local.LocalChannel;
 import io.netty.channel.local.LocalServerChannel;
-import net.minecraft.server.network.EventLoopGroupHolder;
+import net.minecraft.network.Connection;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.jetbrains.annotations.Nullable;
@@ -74,7 +74,7 @@ public final class RelayTunnel {
             // (soon-to-be redirected) connect always finds a listener.
             this.joinAddress = new LocalAddress(JOIN_ADDRESS_PREFIX + UUID.randomUUID());
             this.localChannel = new ServerBootstrap()
-                    .group(EventLoopGroupHolder.local().eventLoopGroup())
+                    .group(Connection.LOCAL_WORKER_GROUP.get())
                     .channel(LocalServerChannel.class)
                     .childHandler(new ChannelInitializer<Channel>() {
                         @Override
@@ -172,7 +172,7 @@ public final class RelayTunnel {
         }
         try {
             this.localChannel = new Bootstrap()
-                    .group(EventLoopGroupHolder.local().eventLoopGroup())
+                    .group(Connection.LOCAL_WORKER_GROUP.get())
                     .channel(LocalChannel.class)
                     .handler(new ChannelInitializer<Channel>() {
                         @Override

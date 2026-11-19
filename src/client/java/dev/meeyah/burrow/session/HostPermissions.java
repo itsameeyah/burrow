@@ -44,7 +44,7 @@ public final class HostPermissions {
         // Enforce bans, locks, player cap, and apply role when a guest finishes joining.
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayer player = handler.getPlayer();
-            if (server.isSingleplayerOwner(player.nameAndId())) {
+            if (server.isSingleplayerOwner(player.getGameProfile())) {
                 return;
             }
             HostWorldState state = HostSession.worldState(server);
@@ -72,7 +72,7 @@ public final class HostPermissions {
         // Clean up runtime join metadata and update player count on leave.
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayer player = handler.getPlayer();
-            if (server.isSingleplayerOwner(player.nameAndId())) {
+            if (server.isSingleplayerOwner(player.getGameProfile())) {
                 return;
             }
             HostWorldState state = HostSession.worldState(server);
@@ -121,12 +121,12 @@ public final class HostPermissions {
 
     /** True iff this player is a non-host Visitor on our running integrated server. */
     public static boolean isVisitor(Player player) {
-        if (player == null || player.level().isClientSide() || !(player instanceof ServerPlayer sp)) {
+        if (player == null || player.level().isClientSide || !(player instanceof ServerPlayer sp)) {
             return false;
         }
         Minecraft mc = Minecraft.getInstance();
         IntegratedServer server = mc == null ? null : mc.getSingleplayerServer();
-        if (server == null || server.isSingleplayerOwner(sp.nameAndId())) {
+        if (server == null || server.isSingleplayerOwner(sp.getGameProfile())) {
             return false;
         }
         HostWorldState state = HostSession.worldState(server);
@@ -142,7 +142,7 @@ public final class HostPermissions {
         state.setRole(uuid, role);
         server.execute(() -> {
             ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-            if (player != null && !server.isSingleplayerOwner(player.nameAndId())) {
+            if (player != null && !server.isSingleplayerOwner(player.getGameProfile())) {
                 applyRoleOnServerThread(server, player, role, true);
             }
         });
@@ -153,7 +153,7 @@ public final class HostPermissions {
     public static void kickPlayer(IntegratedServer server, UUID uuid, String reason) {
         server.execute(() -> {
             ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-            if (player != null && !server.isSingleplayerOwner(player.nameAndId())) {
+            if (player != null && !server.isSingleplayerOwner(player.getGameProfile())) {
                 player.connection.disconnect(Component.literal(reason));
             }
         });
@@ -189,29 +189,29 @@ public final class HostPermissions {
     ) {
         switch (role) {
             case VISITOR -> {
-                if (server.getPlayerList().isOp(player.nameAndId())) {
-                    server.getPlayerList().deop(player.nameAndId());
+                if (server.getPlayerList().isOp(player.getGameProfile())) {
+                    server.getPlayerList().deop(player.getGameProfile());
                 }
                 player.closeContainer();
-                if (player.gameMode() != GameType.ADVENTURE) {
+                if (player.gameMode.getGameModeForPlayer() != GameType.ADVENTURE) {
                     player.setGameMode(GameType.ADVENTURE);
                 }
             }
             case MEMBER -> {
-                if (server.getPlayerList().isOp(player.nameAndId())) {
-                    server.getPlayerList().deop(player.nameAndId());
+                if (server.getPlayerList().isOp(player.getGameProfile())) {
+                    server.getPlayerList().deop(player.getGameProfile());
                 }
                 GameType worldDefault = server.getDefaultGameType();
-                if (player.gameMode() == GameType.ADVENTURE && worldDefault != GameType.ADVENTURE) {
+                if (player.gameMode.getGameModeForPlayer() == GameType.ADVENTURE && worldDefault != GameType.ADVENTURE) {
                     player.setGameMode(worldDefault);
                 }
             }
             case OPERATOR -> {
-                if (!server.getPlayerList().isOp(player.nameAndId())) {
-                    server.getPlayerList().op(player.nameAndId());
+                if (!server.getPlayerList().isOp(player.getGameProfile())) {
+                    server.getPlayerList().op(player.getGameProfile());
                 }
                 GameType worldDefault = server.getDefaultGameType();
-                if (player.gameMode() == GameType.ADVENTURE && worldDefault != GameType.ADVENTURE) {
+                if (player.gameMode.getGameModeForPlayer() == GameType.ADVENTURE && worldDefault != GameType.ADVENTURE) {
                     player.setGameMode(worldDefault);
                 }
             }
