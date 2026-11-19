@@ -89,8 +89,9 @@ public final class BurrowConnection {
                     hello.addProperty("name", name);
                     hello.addProperty("uuid", DevIdentity.offlineUuid(name).toString());
                 } else {
-                    // Real Microsoft/Xbox authentication is wired up in a later milestone.
-                    hello.addProperty("mode", "anonymous");
+                    hello.addProperty("mode", "mojang");
+                    hello.addProperty("name", MojangAuth.username());
+                    hello.addProperty("uuid", MojangAuth.profileIdString());
                 }
                 send(hello.toString());
             }
@@ -161,6 +162,16 @@ public final class BurrowConnection {
     private void handle(JsonObject msg) {
         String op = msg.has("op") ? msg.get("op").getAsString() : "";
         switch (op) {
+            case Protocol.OP_AUTH_CHALLENGE -> {
+                String serverId = str(msg, "serverId");
+                MojangAuth.joinServerAsync(
+                        serverId,
+                        () -> send(Protocol.authVerify(serverId)),
+                        err -> {
+                            LOG.warn("Mojang authentication failed: {}", err);
+                            state.setError(err);
+                        });
+            }
             case Protocol.OP_WELCOME -> {
                 UUID self = msg.has("uuid") ? UUID.fromString(msg.get("uuid").getAsString()) : null;
                 String name = msg.has("name") ? msg.get("name").getAsString() : "?";
@@ -275,7 +286,8 @@ public final class BurrowConnection {
                     strOr(o, "activity", ""),
                     strOr(o, "serverName", ""),
                     strOr(o, "serverIp", ""),
-                    strOr(o, "activityLabel", "")));
+                    strOr(o, "activityLabel", ""),
+                    strOr(o, "gameVersion", "")));
         }
         return out;
     }
@@ -296,7 +308,8 @@ public final class BurrowConnection {
                     strOr(o, "viaName", ""),
                     bool(o, "locked"),
                     intVal(o, "playerCount"),
-                    intVal(o, "maxPlayers")));
+                    intVal(o, "maxPlayers"),
+                    strOr(o, "gameVersion", "")));
         }
         return out;
     }
@@ -348,7 +361,8 @@ public final class BurrowConnection {
                     strOr(o, "viaName", ""),
                     bool(o, "locked"),
                     intVal(o, "playerCount"),
-                    intVal(o, "maxPlayers")));
+                    intVal(o, "maxPlayers"),
+                    strOr(o, "gameVersion", "")));
         }
         return out;
     }

@@ -18,6 +18,7 @@ import java.util.UUID;
 public final class Protocol {
     // Client -> server
     public static final String OP_HELLO = "hello";
+    public static final String OP_AUTH_VERIFY = "auth.verify";
     public static final String OP_FRIEND_ADD = "friend.add";
     public static final String OP_FRIEND_ACCEPT = "friend.accept";
     public static final String OP_FRIEND_DECLINE = "friend.decline";
@@ -32,6 +33,7 @@ public final class Protocol {
     public static final String OP_JOIN_BEGIN = "join.begin";
 
     // Server -> client
+    public static final String OP_AUTH_CHALLENGE = "auth.challenge";
     public static final String OP_WELCOME = "welcome";
     public static final String OP_FRIENDS_SYNC = "friends.sync";
     public static final String OP_PRESENCE_BATCH = "presence.batch";
@@ -49,6 +51,13 @@ public final class Protocol {
     public static JsonObject msg(String op) {
         JsonObject o = new JsonObject();
         o.addProperty("op", op);
+        return o;
+    }
+
+    /** Confirm Mojang sessionserver join for the challenge's serverId. */
+    public static JsonObject authVerify(String serverId) {
+        JsonObject o = msg(OP_AUTH_VERIFY);
+        o.addProperty("serverId", serverId);
         return o;
     }
 

@@ -1,5 +1,6 @@
 package dev.meeyah.burrow.state;
 
+import dev.meeyah.burrow.BurrowClient;
 import dev.meeyah.burrow.ui.BurrowToasts;
 import net.minecraft.client.Minecraft;
 
@@ -29,10 +30,37 @@ public final class FriendsState {
             String activity,
             String serverName,
             String serverIp,
-            String activityLabel
+            String activityLabel,
+            String gameVersion
     ) {
+        public Friend(
+                UUID uuid,
+                String name,
+                String presence,
+                boolean hosting,
+                String worldName,
+                String access,
+                boolean locked,
+                int playerCount,
+                int maxPlayers,
+                String activity,
+                String serverName,
+                String serverIp,
+                String activityLabel
+        ) {
+            this(uuid, name, presence, hosting, worldName, access, locked, playerCount, maxPlayers,
+                    activity, serverName, serverIp, activityLabel, "");
+        }
+
         public boolean isOnline() {
             return "online".equalsIgnoreCase(presence);
+        }
+
+        public boolean isVersionMismatch() {
+            return hosting
+                    && gameVersion != null
+                    && !gameVersion.isBlank()
+                    && !gameVersion.equals(BurrowClient.minecraftVersion());
         }
 
         public boolean hasJoinableServer() {
@@ -102,8 +130,29 @@ public final class FriendsState {
             String viaName,
             boolean locked,
             int playerCount,
-            int maxPlayers
-    ) {}
+            int maxPlayers,
+            String gameVersion
+    ) {
+        public DiscoverableWorld(
+                UUID host,
+                String hostName,
+                String worldName,
+                String access,
+                String source,
+                String viaName,
+                boolean locked,
+                int playerCount,
+                int maxPlayers
+        ) {
+            this(host, hostName, worldName, access, source, viaName, locked, playerCount, maxPlayers, "");
+        }
+
+        public boolean isVersionMismatch() {
+            return gameVersion != null
+                    && !gameVersion.isBlank()
+                    && !gameVersion.equals(BurrowClient.minecraftVersion());
+        }
+    }
 
     public record WorldInvite(
             UUID host,
@@ -138,8 +187,24 @@ public final class FriendsState {
             String viaName,
             boolean locked,
             int playerCount,
-            int maxPlayers
-    ) {}
+            int maxPlayers,
+            String gameVersion
+    ) {
+        public SessionUpdate(
+                UUID host,
+                String hostName,
+                boolean active,
+                String worldName,
+                String access,
+                String source,
+                String viaName,
+                boolean locked,
+                int playerCount,
+                int maxPlayers
+        ) {
+            this(host, hostName, active, worldName, access, source, viaName, locked, playerCount, maxPlayers, "");
+        }
+    }
 
     public interface Listener {
         void friendsChanged();
@@ -353,7 +418,8 @@ public final class FriendsState {
                             u.activity() != null ? u.activity() : f.activity(),
                             u.serverName() != null ? u.serverName() : f.serverName(),
                             u.serverIp() != null ? u.serverIp() : f.serverIp(),
-                            u.activityLabel() != null ? u.activityLabel() : f.activityLabel()));
+                            u.activityLabel() != null ? u.activityLabel() : f.activityLabel(),
+                            u.hosting() ? f.gameVersion() : ""));
                     changed = true;
                     break;
                 }
@@ -385,7 +451,8 @@ public final class FriendsState {
                             f.activity(),
                             f.serverName(),
                             f.serverIp(),
-                            f.activityLabel()));
+                            f.activityLabel(),
+                            u.active() && u.gameVersion() != null ? u.gameVersion() : ""));
                     matchedFriend = true;
                     changed = true;
                     break;
@@ -408,7 +475,8 @@ public final class FriendsState {
                             u.viaName() != null ? u.viaName() : "",
                             u.locked(),
                             u.playerCount(),
-                            u.maxPlayers()));
+                            u.maxPlayers(),
+                            u.gameVersion() != null ? u.gameVersion() : ""));
                     changed = true;
                 } else if (removed) {
                     changed = true;
