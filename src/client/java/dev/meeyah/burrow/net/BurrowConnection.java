@@ -187,16 +187,20 @@ public final class BurrowConnection {
                     String hostName = strOr(msg, "hostName", "?");
                     String worldName = strOr(msg, "worldName", "a world");
                     String invitedByName = strOr(msg, "invitedByName", hostName);
-                    state.addInvite(new FriendsState.WorldInvite(host, hostName, worldName, invitedByName));
-                    BurrowToasts.showWorldInvite(hostName, worldName, invitedByName);
+                    int ttlSecs = intVal(msg, "ttlSeconds");
+                    long ttlMs = ttlSecs > 0 ? ttlSecs * 1000L : FriendsState.INVITE_TTL_MS;
+                    state.addInvite(new FriendsState.WorldInvite(
+                            host, hostName, worldName, invitedByName, System.currentTimeMillis() + ttlMs));
+                    BurrowToasts.showWorldInvite(host, hostName, worldName, invitedByName);
                 }
             }
             case Protocol.OP_INVITE_REQUESTED -> {
                 UUID from = uuid(msg, "from");
                 if (from != null) {
                     String fromName = strOr(msg, "fromName", "?");
-                    state.addInviteRequest(new FriendsState.InviteRequest(from, fromName));
-                    BurrowToasts.showInviteRequest(fromName);
+                    state.addInviteRequest(new FriendsState.InviteRequest(
+                            from, fromName, System.currentTimeMillis() + FriendsState.INVITE_TTL_MS));
+                    BurrowToasts.showInviteRequest(from, fromName);
                 }
             }
             case Protocol.OP_JOIN_READY -> JoinFlow.onJoinReady(

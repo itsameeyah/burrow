@@ -82,9 +82,15 @@ public final class FriendsState {
         }
     }
 
+    public static final long INVITE_TTL_MS = 30_000L;
+
     public record Request(UUID uuid, String name, boolean outgoing) {}
 
-    public record InviteRequest(UUID from, String fromName) {}
+    public record InviteRequest(UUID from, String fromName, long expiresAtMs) {
+        public boolean expired() {
+            return System.currentTimeMillis() > expiresAtMs;
+        }
+    }
 
     public record DiscoverableWorld(
             UUID host,
@@ -102,8 +108,13 @@ public final class FriendsState {
             UUID host,
             String hostName,
             String worldName,
-            String invitedByName
-    ) {}
+            String invitedByName,
+            long expiresAtMs
+    ) {
+        public boolean expired() {
+            return System.currentTimeMillis() > expiresAtMs;
+        }
+    }
 
     public record PresenceUpdate(
             UUID uuid,
@@ -162,6 +173,8 @@ public final class FriendsState {
     }
 
     public List<InviteRequest> inviteRequests() {
+        invites.removeIf(WorldInvite::expired);
+        inviteRequests.removeIf(InviteRequest::expired);
         return List.copyOf(inviteRequests);
     }
 
@@ -170,13 +183,14 @@ public final class FriendsState {
     }
 
     public List<WorldInvite> worldInvites() {
+        invites.removeIf(WorldInvite::expired);
         return List.copyOf(invites);
     }
 
     public @org.jetbrains.annotations.Nullable WorldInvite worldInviteFrom(UUID hostUuid) {
         if (hostUuid == null) return null;
         for (WorldInvite inv : invites) {
-            if (hostUuid.equals(inv.host())) return inv;
+            if (hostUuid.equals(inv.host()) && !inv.expired()) return inv;
         }
         return null;
     }
@@ -184,7 +198,18 @@ public final class FriendsState {
     public boolean hasInviteRequestFrom(UUID fromUuid) {
         if (fromUuid == null) return false;
         for (InviteRequest req : inviteRequests) {
-            if (fromUuid.equals(req.from())) return true;
+            if (fromUuid.equals(req.from()) && !req.expired()) return true;
+        }
+        return false;
+    }
+
+    /** Prune expired 30s invites/requests; returns true if anything was removed. */
+    public boolean pruneExpired() {
+        boolean removedInv = invites.removeIf(WorldInvite::expired);
+        boolean removedReq = inviteRequests.removeIf(InviteRequest::expired);
+        if (removedInv || removedReq) {
+            fireChanged();
+            return true;
         }
         return false;
     }
@@ -242,7 +267,7 @@ public final class FriendsState {
             }
             for (Request r : incoming) {
                 if (!r.outgoing() && r.uuid() != null && !prevIncoming.contains(r.uuid())) {
-                    BurrowToasts.showFriendRequest(r.name());
+                    BurrowToasts.showFriendRequest(r.uuid(), r.name());
                 }
             }
         }

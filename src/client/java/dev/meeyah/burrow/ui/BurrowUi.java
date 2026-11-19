@@ -16,6 +16,19 @@ import net.minecraft.resources.Identifier;
  * Friends) using Minecraft 26.2's built-in 9-slice panel, tab & button sprites.
  */
 public final class BurrowUi {
+    // Unified modal geometry so Friends, Requests, Host World, and Invite Friend
+    // all share the exact same frame size and generous 14px padding.
+    public static final int PANEL_W = 360;
+    public static final int PANEL_H = 236;
+    public static final int PAD = 14;
+    public static final int HEADER_TITLE_Y = 13;
+    public static final int HEADER_SUB_Y = 25;
+    public static final int TABS_Y = 40;
+    public static final int TAB_H = 20;
+    public static final int CONTENT_Y = 59;
+    public static final int CONTENT_H = 136;
+    public static final int FOOTER_Y = 202;
+
     public static final Identifier PANEL_BG = Identifier.withDefaultNamespace("friends/background");
     public static final Identifier TAB_IDLE = Identifier.withDefaultNamespace("widget/tab");
     public static final Identifier TAB_SELECTED = Identifier.withDefaultNamespace("widget/tab_selected");
@@ -80,22 +93,17 @@ public final class BurrowUi {
         g.text(font, text, x + 14, y + 4, TEXT_PRIMARY, false);
     }
 
-    /** Compact colored tag pill with crisp 0.75x scaled text and balanced padding. */
+    /** Compact colored tag pill at crisp native 1.0x pixel font scale with balanced padding. */
     public static int drawTagPill(GuiGraphicsExtractor g, Font font, int x, int y, String label, int color) {
-        float scale = 0.75f;
-        int scaledTextW = Math.round(font.width(label) * scale);
-        int w = scaledTextW + 6;
-        int h = 10;
-        int bg = (color & 0x00FFFFFF) | 0x26000000;
+        int textW = font.width(label);
+        int w = textW + 6;
+        int h = 11;
+        int bg = (color & 0x00FFFFFF) | 0x28000000;
         int border = (color & 0x00FFFFFF) | 0x55000000;
         g.fill(x, y, x + w, y + h, bg);
         g.outline(x, y, w, h, border);
-
-        g.pose().pushMatrix();
-        g.pose().translate(x + 3.5f, y + 2.5f);
-        g.pose().scale(scale, scale);
-        g.text(font, label, 0, 0, color, false);
-        g.pose().popMatrix();
+        // Native 1.0x glyph (7px tall) centered cleanly inside 11px height: 2px top, 2px bottom, 3px left/right
+        g.text(font, label, x + 3, y + 2, color, false);
         return w;
     }
 

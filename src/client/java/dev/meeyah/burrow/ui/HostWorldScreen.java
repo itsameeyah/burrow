@@ -30,14 +30,14 @@ import java.util.UUID;
  * Vanilla-styled "Host World" / "Host Settings" control panel.
  */
 public class HostWorldScreen extends Screen {
-    private static final int PANEL_W = 348;
-    private static final int PANEL_H = 228;
-    private static final int PAD_X = 10;
-    private static final int TABS_Y = 35;
-    private static final int TAB_H = 20;
-    private static final int CONTENT_Y = 54;
-    private static final int CONTENT_H = 136;
-    private static final int FOOTER_Y = 197;
+    private static final int PANEL_W = BurrowUi.PANEL_W;
+    private static final int PANEL_H = BurrowUi.PANEL_H;
+    private static final int PAD_X = BurrowUi.PAD;
+    private static final int TABS_Y = BurrowUi.TABS_Y;
+    private static final int TAB_H = BurrowUi.TAB_H;
+    private static final int CONTENT_Y = BurrowUi.CONTENT_Y;
+    private static final int CONTENT_H = BurrowUi.CONTENT_H;
+    private static final int FOOTER_Y = BurrowUi.FOOTER_Y;
 
     private enum Tab { SETTINGS, PLAYERS, BANS }
 
@@ -390,9 +390,9 @@ public class HostWorldScreen extends Screen {
         String title = hosting ? "Host Settings" : "Host World";
         String worldName = server != null ? HostSession.safeWorldName(server) : "";
 
-        g.text(font, title, this.contentX, this.panelY + 10, BurrowUi.TEXT_PRIMARY, true);
+        g.text(font, title, this.contentX, this.panelY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
         if (!worldName.isEmpty()) {
-            g.text(font, worldName, this.contentX, this.panelY + 21, BurrowUi.TEXT_SECONDARY, false);
+            g.text(font, worldName, this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
         }
 
         if (server != null) {
@@ -400,13 +400,13 @@ public class HostWorldScreen extends Screen {
             int count = Math.max(1, server.getPlayerCount());
             int cap = state != null ? state.maxPlayers() : 8;
             if (hosting && state != null && state.locked()) {
-                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + 11,
+                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + BurrowUi.HEADER_TITLE_Y,
                         BurrowUi.DOT_LOCKED, "LOCKED · " + count + "/" + cap);
             } else if (hosting) {
-                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + 11,
+                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + BurrowUi.HEADER_TITLE_Y,
                         BurrowUi.DOT_LIVE, "LIVE · " + count + "/" + cap);
             } else {
-                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + 11,
+                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + BurrowUi.HEADER_TITLE_Y,
                         BurrowUi.DOT_OFFLINE, "OFFLINE");
             }
         }
@@ -597,13 +597,13 @@ public class HostWorldScreen extends Screen {
         }
     }
 
-    /** Sleek vanilla-styled modal to invite an online friend into the current hosted world. */
+    /** Same-size vanilla-styled sub-panel to invite an online friend into the hosted world. */
     private static class InviteFriendScreen extends Screen {
-        private static final int MODAL_W = 280;
-        private static final int MODAL_H = 196;
         private final Screen parent;
         private int modalX;
         private int modalY;
+        private int innerX;
+        private int innerW;
         private final List<BanRowDisplay> rows = new ArrayList<>();
         private @Nullable String emptyMsg;
 
@@ -616,8 +616,10 @@ public class HostWorldScreen extends Screen {
         protected void init() {
             this.rows.clear();
             this.emptyMsg = null;
-            this.modalX = (this.width - MODAL_W) / 2;
-            this.modalY = Math.max(8, (this.height - MODAL_H) / 2);
+            this.modalX = (this.width - BurrowUi.PANEL_W) / 2;
+            this.modalY = Math.max(2, (this.height - BurrowUi.PANEL_H) / 2);
+            this.innerX = this.modalX + BurrowUi.PAD;
+            this.innerW = BurrowUi.PANEL_W - BurrowUi.PAD * 2;
 
             List<FriendsState.Friend> online = new ArrayList<>();
             for (FriendsState.Friend f : BurrowClient.friends().friends()) {
@@ -626,34 +628,35 @@ public class HostWorldScreen extends Screen {
                 }
             }
 
-            int innerX = this.modalX + 16;
-            int innerW = MODAL_W - 32;
-            int y = this.modalY + 36;
+            int boxX = this.innerX + 8;
+            int boxW = this.innerW - 16;
+            int y = this.modalY + 48;
 
             if (online.isEmpty()) {
                 this.emptyMsg = "No friends online right now.";
             } else {
                 for (FriendsState.Friend f : online.subList(0, Math.min(online.size(), 4))) {
-                    this.rows.add(new BanRowDisplay(f.uuid(), f.name(), innerX, y, innerW, 28));
+                    this.rows.add(new BanRowDisplay(f.uuid(), f.name(), boxX, y, boxW, 28));
                     addRenderableWidget(Button.builder(Component.literal("Invite"), b -> {
                         HostSession.inviteFriend(f.uuid());
                         b.active = false;
                         b.setMessage(Component.literal("Invited"));
-                    }).bounds(innerX + innerW - 60, y + 5, 54, 18).build());
-                    y += 31;
+                    }).bounds(boxX + boxW - 60, y + 5, 54, 18).build());
+                    y += 32;
                 }
             }
 
             addRenderableWidget(Button.builder(Component.literal("Back"), b -> onClose())
-                    .bounds(this.modalX + MODAL_W - 86, this.modalY + MODAL_H - 30, 76, 20).build());
+                    .bounds(this.innerX + this.innerW - 84, this.modalY + BurrowUi.FOOTER_Y, 84, 20).build());
         }
 
         @Override
         public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
             super.extractBackground(g, mouseX, mouseY, partialTick);
-            BurrowUi.drawModalPanel(g, this.modalX, this.modalY, MODAL_W, MODAL_H);
-            g.text(this.font, "Invite Friend to World", this.modalX + 10, this.modalY + 11, BurrowUi.TEXT_PRIMARY, true);
-            BurrowUi.drawInsetBox(g, this.modalX + 10, this.modalY + 28, MODAL_W - 20, MODAL_H - 64);
+            BurrowUi.drawModalPanel(g, this.modalX, this.modalY, BurrowUi.PANEL_W, BurrowUi.PANEL_H);
+            g.text(this.font, "Invite Friend to World", this.innerX, this.modalY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
+            g.text(this.font, "Invites expire after 30 seconds", this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
+            BurrowUi.drawInsetBox(g, this.innerX, this.modalY + 40, this.innerW, 155);
 
             for (BanRowDisplay row : this.rows) {
                 g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), BurrowUi.CARD_BG);
@@ -663,7 +666,7 @@ public class HostWorldScreen extends Screen {
             }
             if (this.emptyMsg != null) {
                 g.centeredText(this.font, this.emptyMsg,
-                        this.modalX + MODAL_W / 2, this.modalY + MODAL_H / 2 - 4, BurrowUi.TEXT_MUTED);
+                        this.modalX + BurrowUi.PANEL_W / 2, this.modalY + 114, BurrowUi.TEXT_MUTED);
             }
         }
 

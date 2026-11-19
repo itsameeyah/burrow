@@ -35,14 +35,14 @@ import java.util.UUID;
  * Add Friend & Requests modal in the footer.
  */
 public class BurrowFriendsScreen extends Screen {
-    private static final int PANEL_W = 348;
-    private static final int PANEL_H = 228;
-    private static final int PAD_X = 10;
-    private static final int TABS_Y = 35;
-    private static final int TAB_H = 20;
-    private static final int CONTENT_Y = 54;
-    private static final int CONTENT_H = 136;
-    private static final int FOOTER_Y = 197;
+    private static final int PANEL_W = BurrowUi.PANEL_W;
+    private static final int PANEL_H = BurrowUi.PANEL_H;
+    private static final int PAD_X = BurrowUi.PAD;
+    private static final int TABS_Y = BurrowUi.TABS_Y;
+    private static final int TAB_H = BurrowUi.TAB_H;
+    private static final int CONTENT_Y = BurrowUi.CONTENT_Y;
+    private static final int CONTENT_H = BurrowUi.CONTENT_H;
+    private static final int FOOTER_Y = BurrowUi.FOOTER_Y;
 
     private enum Tab { FRIENDS, WORLDS }
 
@@ -93,7 +93,7 @@ public class BurrowFriendsScreen extends Screen {
         boolean incognito = cfg != null && cfg.incognito;
         addRenderableWidget(new BurrowUi.IncognitoButton(
                 this.contentX + this.contentW - 20,
-                this.panelY + 10,
+                this.panelY + BurrowUi.HEADER_TITLE_Y,
                 incognito,
                 () -> {
                     if (cfg != null) {
@@ -398,14 +398,14 @@ public class BurrowFriendsScreen extends Screen {
 
         BurrowUi.drawModalPanel(g, this.panelX, this.panelY, PANEL_W, PANEL_H);
 
-        g.text(this.font, "Friends", this.contentX, this.panelY + 10, BurrowUi.TEXT_PRIMARY, true);
+        g.text(this.font, "Friends", this.contentX, this.panelY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
         String flash = BurrowClient.friends().errorFlash();
         this.showingErrorFlash = (flash != null);
         if (flash != null) {
             g.text(this.font, ellipsize(this.font, "! " + flash, 290),
-                    this.contentX, this.panelY + 21, 0xFFFF9977, false);
+                    this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, 0xFFFF9977, false);
         } else {
-            g.text(this.font, statusText(), this.contentX, this.panelY + 21, BurrowUi.TEXT_SECONDARY, false);
+            g.text(this.font, statusText(), this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
         }
 
         BurrowUi.drawInsetBox(g, this.contentX, this.contentY, this.contentW, CONTENT_H);
@@ -470,6 +470,7 @@ public class BurrowFriendsScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
+        BurrowClient.friends().pruneExpired();
         if (this.showingErrorFlash && BurrowClient.friends().errorFlash() == null) {
             rebuildWidgets();
         }
@@ -620,11 +621,11 @@ public class BurrowFriendsScreen extends Screen {
         }
     }
 
-    /** Dedicated modal for adding friends and handling incoming/outgoing friend requests. */
+    /** Same-size dedicated modal for adding friends and managing friend requests. */
     static class FriendRequestsScreen extends Screen {
-        private static final int MODAL_W = 324;
-        private static final int MODAL_H = 216;
-        private static final int PAD = 10;
+        private static final int MODAL_W = BurrowUi.PANEL_W;
+        private static final int MODAL_H = BurrowUi.PANEL_H;
+        private static final int PAD = BurrowUi.PAD;
 
         private final Screen parent;
         private final FriendsState.Listener listener = () -> {
@@ -654,7 +655,7 @@ public class BurrowFriendsScreen extends Screen {
             this.rows.clear();
             this.emptyMsg = null;
             this.modalX = (this.width - MODAL_W) / 2;
-            this.modalY = Math.max(4, (this.height - MODAL_H) / 2);
+            this.modalY = Math.max(2, (this.height - MODAL_H) / 2);
             this.innerX = this.modalX + PAD;
             this.innerW = MODAL_W - PAD * 2;
 
@@ -662,14 +663,14 @@ public class BurrowFriendsScreen extends Screen {
             int boxX = this.innerX + 8;
             int boxW = this.innerW - 16;
             int sendW = 54;
-            this.nameBox = new EditBox(this.font, boxX, this.modalY + 41, boxW - sendW - 4, 18,
+            this.nameBox = new EditBox(this.font, boxX, this.modalY + 49, boxW - sendW - 4, 18,
                     Component.literal("Add friend"));
             this.nameBox.setMaxLength(32);
             this.nameBox.setHint(Component.literal("Enter username..."));
             this.nameBox.setValue(this.typedName);
             addRenderableWidget(this.nameBox);
             addRenderableWidget(Button.builder(Component.literal("Send"), b -> sendRequest())
-                    .bounds(boxX + boxW - sendW, this.modalY + 40, sendW, 20).build());
+                    .bounds(boxX + boxW - sendW, this.modalY + 48, sendW, 20).build());
             setInitialFocus(this.nameBox);
 
             List<FriendsState.Request> requests = BurrowClient.friends().requests();
@@ -682,7 +683,7 @@ public class BurrowFriendsScreen extends Screen {
                 int from = this.page * perPage;
                 int to = Math.min(requests.size(), from + perPage);
 
-                int y = this.modalY + 66;
+                int y = this.modalY + 76;
                 for (FriendsState.Request r : requests.subList(from, to)) {
                     if (r.outgoing()) {
                         this.rows.add(new CardDisplay(r.uuid(), r.name(), "Outgoing request",
@@ -713,40 +714,40 @@ public class BurrowFriendsScreen extends Screen {
                     Button prev = Button.builder(Component.literal("< Prev"), b -> {
                         this.page--;
                         rebuildWidgets();
-                    }).bounds(boxX, this.modalY + MODAL_H - 52, 52, 16).build();
+                    }).bounds(boxX, this.modalY + 175, 52, 16).build();
                     prev.active = this.page > 0;
                     addRenderableWidget(prev);
 
                     Button next = Button.builder(Component.literal("Next >"), b -> {
                         this.page++;
                         rebuildWidgets();
-                    }).bounds(boxX + boxW - 52, this.modalY + MODAL_H - 52, 52, 16).build();
+                    }).bounds(boxX + boxW - 52, this.modalY + 175, 52, 16).build();
                     next.active = this.page < pages - 1;
                     addRenderableWidget(next);
                 }
             }
 
             addRenderableWidget(Button.builder(Component.literal("Back"), b -> onClose())
-                    .bounds(this.innerX + this.innerW - 80, this.modalY + MODAL_H - 30, 80, 20).build());
+                    .bounds(this.innerX + this.innerW - 84, this.modalY + BurrowUi.FOOTER_Y, 84, 20).build());
         }
 
         @Override
         public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
             super.extractBackground(g, mouseX, mouseY, partialTick);
             BurrowUi.drawModalPanel(g, this.modalX, this.modalY, MODAL_W, MODAL_H);
-            g.text(this.font, "Add Friend & Requests", this.innerX, this.modalY + 10, BurrowUi.TEXT_PRIMARY, true);
+            g.text(this.font, "Add Friend & Requests", this.innerX, this.modalY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
 
             String flash = BurrowClient.friends().errorFlash();
             this.showingFlash = (flash != null);
             if (flash != null) {
                 g.text(this.font, ellipsize(this.font, "! " + flash, this.innerW),
-                        this.innerX, this.modalY + 21, 0xFFFF9977, false);
+                        this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, 0xFFFF9977, false);
             } else {
                 g.text(this.font, "Add someone by username or manage pending requests",
-                        this.innerX, this.modalY + 21, BurrowUi.TEXT_SECONDARY, false);
+                        this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
             }
 
-            BurrowUi.drawInsetBox(g, this.innerX, this.modalY + 34, this.innerW, MODAL_H - 72);
+            BurrowUi.drawInsetBox(g, this.innerX, this.modalY + 40, this.innerW, 155);
 
             for (CardDisplay c : this.rows) {
                 g.fill(c.x(), c.y(), c.x() + c.w(), c.y() + c.h(), BurrowUi.CARD_BG);
@@ -758,7 +759,7 @@ public class BurrowFriendsScreen extends Screen {
 
             if (this.emptyMsg != null) {
                 g.centeredText(this.font, this.emptyMsg,
-                        this.modalX + MODAL_W / 2, this.modalY + 112, BurrowUi.TEXT_MUTED);
+                        this.modalX + MODAL_W / 2, this.modalY + 124, BurrowUi.TEXT_MUTED);
             }
         }
 

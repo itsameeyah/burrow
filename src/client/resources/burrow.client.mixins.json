@@ -5,6 +5,7 @@
 	"client": [
 		"GuiMixin",
 		"PauseScreenMixin",
+		"KeyboardHandlerMixin",
 		"OnlineOptionsScreenMixin",
 		"ServerConnectionListenerMixin",
 		"ServerNameResolverMixin",
