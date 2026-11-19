@@ -2,31 +2,38 @@ package dev.meeyah.burrow.mixin;
 
 import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.ui.BurrowFriendsScreen;
-import net.minecraft.client.Minecraft;
+import dev.meeyah.burrow.ui.BurrowUi;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.layouts.GridLayout;
-import net.minecraft.client.gui.layouts.LayoutElement;
 import net.minecraft.client.gui.screens.PauseScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Repurposes the Pause Menu's "Open to LAN" button as Burrow's "Host World"
- * / "Host Settings" control panel (keeping it accessible even while Burrow
- * has published the integrated server), and adds a full-width "Friends" button
- * cleanly inside the Pause Menu grid above Disconnect / Save and Quit.
+ * Repurposes the Pause Menu's "Open to LAN" button as Burrow's "Host World" /
+ * "Host Settings" control panel (keeping it accessible while hosting), and
+ * adds a compact 20x20 Friends icon button beside the Options / Host World row.
  */
 @Mixin(PauseScreen.class)
-public abstract class PauseScreenMixin {
+public abstract class PauseScreenMixin extends Screen {
     @Shadow
     @Final
     private static Component SHARE_TO_LAN;
+
+    @Shadow
+    private Button disconnectButton;
+
+    protected PauseScreenMixin(Component title) {
+        super(title);
+    }
 
     @Redirect(
             method = "createPauseMenu",
@@ -57,26 +64,19 @@ public abstract class PauseScreenMixin {
         return label;
     }
 
-    @Redirect(
-            method = "createPauseMenu",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/client/gui/layouts/GridLayout$RowHelper;addChild(Lnet/minecraft/client/gui/layouts/LayoutElement;I)Lnet/minecraft/client/gui/layouts/LayoutElement;"
-            )
-    )
-    private <T extends LayoutElement> T burrow$addFriendsBeforeDisconnect(
-            GridLayout.RowHelper rowHelper,
-            T disconnectBtn,
-            int columns
-    ) {
-        rowHelper.addChild(
-                Button.builder(
-                                Component.literal("Friends"),
-                                b -> Minecraft.getInstance().setScreen(new BurrowFriendsScreen((PauseScreen) (Object) this)))
-                        .width(204)
-                        .build(),
-                2
-        );
-        return rowHelper.addChild(disconnectBtn, columns);
+    @Inject(method = "createPauseMenu", at = @At("TAIL"))
+    private void burrow$addFriendsButton(CallbackInfo ci) {
+        if (this.disconnectButton == null) {
+            return;
+        }
+        int x = this.disconnectButton.getX() + this.disconnectButton.getWidth() + 4;
+        int y = this.disconnectButton.getY() - 24;
+        this.addRenderableWidget(new BurrowUi.FriendsButton(
+                x, y,
+                () -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.setScreen(new BurrowFriendsScreen(this));
+                    }
+                }));
     }
 }
