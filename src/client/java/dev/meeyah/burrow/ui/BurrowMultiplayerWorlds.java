@@ -3,15 +3,15 @@ package dev.meeyah.burrow.ui;
 import dev.meeyah.burrow.BurrowClient;
 import dev.meeyah.burrow.session.JoinFlow;
 import dev.meeyah.burrow.state.FriendsState;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.navigation.CommonInputs;
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.gui.screens.multiplayer.ServerSelectionList;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -26,9 +26,9 @@ import java.util.UUID;
  * Open worlds) at the bottom of Minecraft's vanilla Multiplayer server list.
  */
 public final class BurrowMultiplayerWorlds {
-    private static final Identifier JOIN_SPRITE = Identifier.withDefaultNamespace("server_list/join");
-    private static final Identifier JOIN_HIGHLIGHTED_SPRITE = Identifier.withDefaultNamespace("server_list/join_highlighted");
-    private static final Identifier INCOMPATIBLE_SPRITE = Identifier.withDefaultNamespace("server_list/incompatible");
+    private static final ResourceLocation JOIN_SPRITE = ResourceLocation.withDefaultNamespace("server_list/join");
+    private static final ResourceLocation JOIN_HIGHLIGHTED_SPRITE = ResourceLocation.withDefaultNamespace("server_list/join_highlighted");
+    private static final ResourceLocation INCOMPATIBLE_SPRITE = ResourceLocation.withDefaultNamespace("server_list/incompatible");
 
     private BurrowMultiplayerWorlds() {}
 
@@ -51,11 +51,14 @@ public final class BurrowMultiplayerWorlds {
     ) {}
 
     /** Builds fresh ServerSelectionList entries for all currently joinable Burrow worlds. */
-    public static List<ServerSelectionList.Entry> buildEntries() {
+    public static List<ServerSelectionList.Entry> buildEntries(
+            JoinMultiplayerScreen screen,
+            ServerSelectionList list
+    ) {
         List<JoinableWorld> worlds = collectJoinableWorlds();
         List<ServerSelectionList.Entry> out = new ArrayList<>(worlds.size());
         for (JoinableWorld w : worlds) {
-            out.add(new WorldEntry(w));
+            out.add(new WorldEntry(screen, list, w));
         }
         return out;
     }
@@ -190,10 +193,21 @@ public final class BurrowMultiplayerWorlds {
         private static final Component LABEL = Component.literal("Burrow Worlds");
 
         @Override
-        public void extractContent(GuiGraphicsExtractor g, int mouseX, int mouseY, boolean hovered, float partialTick) {
+        public void render(
+                GuiGraphics g,
+                int index,
+                int top,
+                int left,
+                int width,
+                int height,
+                int mouseX,
+                int mouseY,
+                boolean hovered,
+                float partialTick
+        ) {
             Font font = Minecraft.getInstance().font;
-            int midX = getContentXMiddle();
-            int midY = getContentYMiddle();
+            int midX = left + width / 2;
+            int midY = top + height / 2;
             int labelW = font.width(LABEL);
             int totalW = labelW + 10;
             int startX = midX - totalW / 2;
@@ -202,38 +216,33 @@ public final class BurrowMultiplayerWorlds {
             int lineY = midY;
             int leftEnd = startX - 8;
             int rightStart = startX + totalW + 8;
-            if (leftEnd > getContentX() + 6) {
-                g.fill(getContentX() + 6, lineY, leftEnd, lineY + 1, 0x44FFFFFF);
+            if (leftEnd > left + 6) {
+                g.fill(left + 6, lineY, leftEnd, lineY + 1, 0x44FFFFFF);
             }
-            if (rightStart < getContentRight() - 6) {
-                g.fill(rightStart, lineY, getContentRight() - 6, lineY + 1, 0x44FFFFFF);
+            if (rightStart < left + width - 6) {
+                g.fill(rightStart, lineY, left + width - 6, lineY + 1, 0x44FFFFFF);
             }
 
             g.fill(startX, midY - 2, startX + 4, midY + 2, BurrowUi.DOT_LIVE);
-            g.text(font, LABEL, startX + 8, midY - 4, 0xFFE0E0E8, true);
+            g.drawString(font, LABEL, startX + 8, midY - 4, 0xFFE0E0E8, true);
         }
 
         @Override
         public Component getNarration() {
             return LABEL;
         }
-
-        @Override
-        protected boolean matches(ServerSelectionList.Entry other) {
-            return other instanceof HeaderEntry;
-        }
-
-        @Override
-        public void join() {
-            // Section header is not joinable.
-        }
     }
 
     /** Vanilla-native Multiplayer list row for a joinable Burrow world. */
     public static final class WorldEntry extends ServerSelectionList.Entry {
+        private final JoinMultiplayerScreen screen;
+        private final ServerSelectionList list;
         private final JoinableWorld world;
+        private long lastClickTime = 0L;
 
-        public WorldEntry(JoinableWorld world) {
+        public WorldEntry(JoinMultiplayerScreen screen, ServerSelectionList list, JoinableWorld world) {
+            this.screen = screen;
+            this.list = list;
             this.world = world;
         }
 
@@ -242,11 +251,22 @@ public final class BurrowMultiplayerWorlds {
         }
 
         @Override
-        public void extractContent(GuiGraphicsExtractor g, int mouseX, int mouseY, boolean hovered, float partialTick) {
+        public void render(
+                GuiGraphics g,
+                int index,
+                int top,
+                int left,
+                int width,
+                int height,
+                int mouseX,
+                int mouseY,
+                boolean hovered,
+                float partialTick
+        ) {
             Font font = Minecraft.getInstance().font;
-            int x = getContentX();
-            int y = getContentY();
-            int w = getContentWidth();
+            int x = left;
+            int y = top;
+            int w = width;
 
             // 32x32 host skin head on the left (matches vanilla server icon dimensions)
             PlayerHeads.draw(g, this.world.host(), this.world.hostName(), x, y, 32);
@@ -254,14 +274,14 @@ public final class BurrowMultiplayerWorlds {
             boolean hoveringIcon = hovered && mouseX >= x && mouseX < x + 32 && mouseY >= y && mouseY < y + 32;
             if (hovered && !this.world.versionMismatch()) {
                 g.fill(x, y, x + 32, y + 32, 0x80909090);
-                Identifier sprite = hoveringIcon ? JOIN_HIGHLIGHTED_SPRITE : JOIN_SPRITE;
-                g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, 32, 32);
+                ResourceLocation sprite = hoveringIcon ? JOIN_HIGHLIGHTED_SPRITE : JOIN_SPRITE;
+                g.blitSprite(sprite, x, y, 32, 32);
             }
 
             // Right-side status icon + player count (aligned like OnlineServerEntry)
             int rightCursor = x + w - 5;
             if (this.world.versionMismatch()) {
-                g.blitSprite(RenderPipelines.GUI_TEXTURED, INCOMPATIBLE_SPRITE, rightCursor - 10, y + 1, 10, 8);
+                g.blitSprite(INCOMPATIBLE_SPRITE, rightCursor - 10, y + 1, 10, 8);
                 rightCursor -= 14;
             } else {
                 g.fill(rightCursor - 5, y + 3, rightCursor - 1, y + 7, BurrowUi.DOT_LIVE);
@@ -270,7 +290,7 @@ public final class BurrowMultiplayerWorlds {
             if (this.world.maxPlayers() > 0) {
                 String countText = this.world.playerCount() + "/" + this.world.maxPlayers();
                 int countW = font.width(countText);
-                g.text(font, countText, rightCursor - countW, y + 1, 0xFFAAAAAA, false);
+                g.drawString(font, countText, rightCursor - countW, y + 1, 0xFFAAAAAA, false);
                 rightCursor -= countW + 6;
             }
 
@@ -278,11 +298,11 @@ public final class BurrowMultiplayerWorlds {
             int badgeW = font.width(this.world.badge()) + 6;
             int maxTitleW = Math.max(40, rightCursor - textX - badgeW - 6);
             String title = BurrowFriendsScreen.ellipsize(font, this.world.worldName(), maxTitleW);
-            g.text(font, title, textX, y + 1, BurrowUi.TEXT_PRIMARY, true);
+            g.drawString(font, title, textX, y + 1, BurrowUi.TEXT_PRIMARY, true);
             BurrowUi.drawTagPill(g, font, textX + font.width(title) + 5, y, this.world.badge(), this.world.badgeColor());
 
             int maxLineW = Math.max(60, w - 40);
-            g.text(font,
+            g.drawString(font,
                     BurrowFriendsScreen.ellipsize(font, "Hosted by " + this.world.hostName(), maxLineW),
                     textX, y + 12, 0xFFA0A0A0, false);
 
@@ -290,31 +310,35 @@ public final class BurrowMultiplayerWorlds {
                     ? "Incompatible version (MC " + this.world.gameVersion() + ")"
                     : "Burrow · " + this.world.sourceDesc();
             int line3Color = this.world.versionMismatch() ? BurrowUi.DOT_LOCKED : 0xFF808080;
-            g.text(font, BurrowFriendsScreen.ellipsize(font, line3, maxLineW), textX, y + 23, line3Color, false);
+            g.drawString(font, BurrowFriendsScreen.ellipsize(font, line3, maxLineW), textX, y + 23, line3Color, false);
         }
 
         @Override
-        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            this.screen.setSelected(this);
+            long now = Util.getMillis();
+            boolean doubleClick = (now - this.lastClickTime) < 250L;
+            this.lastClickTime = now;
+
             if (!this.world.versionMismatch()) {
-                double relX = event.x() - getContentX();
+                double relX = mouseX - this.list.getRowLeft();
                 if (doubleClick || (relX >= 0 && relX < 32)) {
                     join();
                     return true;
                 }
             }
-            return super.mouseClicked(event, doubleClick);
+            return super.mouseClicked(mouseX, mouseY, button);
         }
 
         @Override
-        public boolean keyPressed(KeyEvent event) {
-            if (event.isSelection() && !this.world.versionMismatch()) {
+        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            if (CommonInputs.selected(keyCode) && !this.world.versionMismatch()) {
                 join();
                 return true;
             }
-            return super.keyPressed(event);
+            return super.keyPressed(keyCode, scanCode, modifiers);
         }
 
-        @Override
         public void join() {
             if (!this.world.versionMismatch()) {
                 JoinFlow.beginByHostUuid(this.world.host());
@@ -324,11 +348,6 @@ public final class BurrowMultiplayerWorlds {
         @Override
         public Component getNarration() {
             return Component.literal(this.world.worldName() + " hosted by " + this.world.hostName());
-        }
-
-        @Override
-        protected boolean matches(ServerSelectionList.Entry other) {
-            return other instanceof WorldEntry w && this.world.host().equals(w.world.host());
         }
     }
 }

@@ -1,14 +1,14 @@
 {
 	"required": true,
 	"package": "dev.meeyah.burrow.mixin",
-	"compatibilityLevel": "JAVA_25",
+	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"GuiMixin",
+		"MinecraftMixin",
+		"TitleScreenMixin",
 		"PauseScreenMixin",
 		"KeyboardHandlerMixin",
 		"JoinMultiplayerScreenMixin",
 		"ServerSelectionListMixin",
-		"OnlineOptionsScreenMixin",
 		"ServerConnectionListenerMixin",
 		"ServerNameResolverMixin",
 		"ConnectionMixin",

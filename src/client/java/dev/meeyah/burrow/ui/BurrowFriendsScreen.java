@@ -10,15 +10,13 @@ import dev.meeyah.burrow.state.ActivityTracker;
 import dev.meeyah.burrow.state.FriendsState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
@@ -121,8 +119,8 @@ public class BurrowFriendsScreen extends Screen {
             List<UUID> uuids = new ArrayList<>();
             List<String> names = new ArrayList<>();
             for (GameProfile p : serverPlayers) {
-                if (p.id() != null) uuids.add(p.id());
-                if (p.name() != null && !p.name().isBlank()) names.add(p.name());
+                if (p.getId() != null) uuids.add(p.getId());
+                if (p.getName() != null && !p.getName().isBlank()) names.add(p.getName());
             }
             BurrowClient.connection().checkUsers(uuids, names);
         }
@@ -169,7 +167,7 @@ public class BurrowFriendsScreen extends Screen {
         int reqBtnW = incomingCount > 0 ? 116 : 96;
         addRenderableWidget(Button.builder(reqLabel, b -> {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(new FriendRequestsScreen(this));
+                this.minecraft.setScreen(new FriendRequestsScreen(this));
             }
         }).bounds(this.contentX, footerY, reqBtnW, 20).build());
 
@@ -177,7 +175,7 @@ public class BurrowFriendsScreen extends Screen {
             boolean hosting = HostSession.isHosting();
             addRenderableWidget(Button.builder(
                             Component.literal(hosting ? "Host Settings" : "Host World"),
-                            b -> mc.gui.setScreen(new HostWorldScreen(this)))
+                            b -> mc.setScreen(new HostWorldScreen(this)))
                     .bounds(this.contentX + reqBtnW + 4, footerY, 92, 20).build());
         } else {
             HostSession.ensureStopped();
@@ -353,7 +351,7 @@ public class BurrowFriendsScreen extends Screen {
                         Component.literal("Remove").withColor(0xFFFF8A8A),
                         b -> {
                             if (this.minecraft != null) {
-                                this.minecraft.gui.setScreen(new RemoveFriendScreen(this, f));
+                                this.minecraft.setScreen(new RemoveFriendScreen(this, f));
                             }
                         })
                 .bounds(x + w - remW - 6, btnY, remW, 18).build());
@@ -384,13 +382,13 @@ public class BurrowFriendsScreen extends Screen {
         List<GameProfile> sorted = new ArrayList<>(players);
         sorted.sort(Comparator
                 .comparingInt((GameProfile p) -> {
-                    boolean isFriend = fs.isFriend(p.id()) || fs.isFriendByName(p.name());
-                    boolean hasMod = isFriend || fs.hasBurrowAccount(p.id(), p.name());
+                    boolean isFriend = fs.isFriend(p.getId()) || fs.isFriendByName(p.getName());
+                    boolean hasMod = isFriend || fs.hasBurrowAccount(p.getId(), p.getName());
                     if (hasMod && !isFriend) return 0;
                     if (isFriend) return 1;
                     return 2;
                 })
-                .thenComparing(p -> p.name() == null ? "" : p.name().toLowerCase()));
+                .thenComparing(p -> p.getName() == null ? "" : p.getName().toLowerCase()));
 
         int innerX = this.contentX + 8;
         int innerW = this.contentW - 16;
@@ -403,8 +401,8 @@ public class BurrowFriendsScreen extends Screen {
         List<FriendsState.Request> reqs = fs.requests();
         int y = this.contentY + 8;
         for (GameProfile p : sorted.subList(from, to)) {
-            UUID uuid = p.id();
-            String name = p.name() == null ? "?" : p.name();
+            UUID uuid = p.getId();
+            String name = p.getName() == null ? "?" : p.getName();
             boolean isFriend = fs.isFriend(uuid) || fs.isFriendByName(name);
             boolean hasMod = isFriend || fs.hasBurrowAccount(uuid, name);
 
@@ -482,9 +480,9 @@ public class BurrowFriendsScreen extends Screen {
         String myName = this.minecraft.getUser() == null ? null : this.minecraft.getUser().getName();
         for (PlayerInfo info : conn.getListedOnlinePlayers()) {
             GameProfile prof = info.getProfile();
-            if (prof == null || prof.name() == null || prof.name().isBlank()) continue;
-            if (myProfileId != null && myProfileId.equals(prof.id())) continue;
-            if (myName != null && myName.equalsIgnoreCase(prof.name())) continue;
+            if (prof == null || prof.getName() == null || prof.getName().isBlank()) continue;
+            if (myProfileId != null && myProfileId.equals(prof.getId())) continue;
+            if (myName != null && myName.equalsIgnoreCase(prof.getName())) continue;
             out.add(prof);
         }
         return out;
@@ -583,19 +581,19 @@ public class BurrowFriendsScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-        super.extractBackground(g, mouseX, mouseY, partialTick);
+    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        super.renderBackground(g, mouseX, mouseY, partialTick);
 
         BurrowUi.drawModalPanel(g, this.panelX, this.panelY, PANEL_W, PANEL_H);
 
-        g.text(this.font, "Friends", this.contentX, this.panelY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
+        g.drawString(this.font, "Friends", this.contentX, this.panelY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
         String flash = BurrowClient.friends().errorFlash();
         this.showingErrorFlash = (flash != null);
         if (flash != null) {
-            g.text(this.font, ellipsize(this.font, "! " + flash, 290),
+            g.drawString(this.font, ellipsize(this.font, "! " + flash, 290),
                     this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, 0xFFFF9977, false);
         } else {
-            g.text(this.font, statusText(), this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
+            g.drawString(this.font, statusText(), this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
         }
 
         BurrowUi.drawInsetBox(g, this.contentX, this.contentY, this.contentW, CONTENT_H);
@@ -605,24 +603,24 @@ public class BurrowFriendsScreen extends Screen {
             int nameColor = c.muted() ? BurrowUi.TEXT_MUTED : BurrowUi.TEXT_PRIMARY;
             int subColor = c.muted() ? 0xFF686872 : BurrowUi.TEXT_SECONDARY;
             g.fill(c.x(), c.y(), c.x() + c.w(), c.y() + c.h(), cardBg);
-            g.outline(c.x(), c.y(), c.w(), c.h(), BurrowUi.CARD_BORDER);
+            g.renderOutline(c.x(), c.y(), c.w(), c.h(), BurrowUi.CARD_BORDER);
             PlayerHeads.draw(g, c.uuid(), c.name(), c.x() + 5, c.y() + 5, 20);
             if (c.muted()) {
                 g.fill(c.x() + 5, c.y() + 5, c.x() + 25, c.y() + 25, 0x88141418);
             }
             int textX = c.x() + 31;
-            g.text(this.font, c.name(), textX, c.y() + 5, nameColor, !c.muted());
+            g.drawString(this.font, c.name(), textX, c.y() + 5, nameColor, !c.muted());
             if (c.badge() != null && !c.badge().isEmpty()) {
                 int nameW = this.font.width(c.name());
                 BurrowUi.drawTagPill(g, this.font, textX + nameW + 5, c.y() + 4, c.badge(), c.badgeColor());
             }
             int maxSubW = c.w() - 100;
-            g.text(this.font, ellipsize(this.font, c.subtitle(), maxSubW),
+            g.drawString(this.font, ellipsize(this.font, c.subtitle(), maxSubW),
                     textX, c.y() + 17, subColor, false);
         }
 
         if (this.emptyMessage != null) {
-            g.centeredText(this.font, this.emptyMessage,
+            g.drawCenteredString(this.font, this.emptyMessage,
                     this.contentX + this.contentW / 2,
                     this.contentY + CONTENT_H / 2 - 4,
                     BurrowUi.TEXT_MUTED);
@@ -678,17 +676,17 @@ public class BurrowFriendsScreen extends Screen {
     @Override
     public void onClose() {
         if (this.parent != null && this.minecraft != null) {
-            this.minecraft.gui.setScreen(this.parent);
+            this.minecraft.setScreen(this.parent);
         } else {
             super.onClose();
         }
     }
 
     private void onFriendsChanged() {
-        if (this.minecraft == null || this.minecraft.gui == null) {
+        if (this.minecraft == null) {
             return;
         }
-        if (this.minecraft.gui.screen() instanceof BurrowFriendsScreen fs) {
+        if (this.minecraft.screen instanceof BurrowFriendsScreen fs) {
             fs.rebuildWidgets();
         }
     }
@@ -739,7 +737,7 @@ public class BurrowFriendsScreen extends Screen {
         }
 
         @Override
-        protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+        protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
             int x = getX();
             int y = getY();
             int w = getWidth();
@@ -749,11 +747,11 @@ public class BurrowFriendsScreen extends Screen {
                     ? BurrowUi.CARD_SELECTED
                     : (this.isHovered ? BurrowUi.CARD_HOVER : BurrowUi.CARD_BG);
             g.fill(x, y, x + w, y + h, bg);
-            g.outline(x, y, w, h, this.expanded ? BurrowUi.CARD_BORDER_ACTIVE : BurrowUi.CARD_BORDER);
+            g.renderOutline(x, y, w, h, this.expanded ? BurrowUi.CARD_BORDER_ACTIVE : BurrowUi.CARD_BORDER);
 
             if (this.expanded) {
                 g.fill(x, y + h, x + w, y + h + 24, BurrowUi.DRAWER_BG);
-                g.outline(x, y + h - 1, w, 25, BurrowUi.CARD_BORDER_ACTIVE);
+                g.renderOutline(x, y + h - 1, w, 25, BurrowUi.CARD_BORDER_ACTIVE);
             }
 
             // Player skin head + corner status dot (blue if invite sent or invite requested!)
@@ -774,7 +772,7 @@ public class BurrowFriendsScreen extends Screen {
             Font font = Minecraft.getInstance().font;
             int textX = x + 32;
             int nameColor = this.friend.isOnline() ? BurrowUi.TEXT_PRIMARY : BurrowUi.TEXT_SECONDARY;
-            g.text(font, this.friend.name(), textX, y + 5, nameColor, true);
+            g.drawString(font, this.friend.name(), textX, y + 5, nameColor, true);
 
             // Compact native-scale tag pill next to name
             int nameW = font.width(this.friend.name());
@@ -805,16 +803,16 @@ public class BurrowFriendsScreen extends Screen {
             int subColor = (this.worldInvite != null || this.requestedInvite)
                     ? BurrowUi.DOT_NOTIFY
                     : (this.friend.isOnline() ? BurrowUi.TEXT_SECONDARY : BurrowUi.TEXT_MUTED);
-            g.text(font, ellipsize(font, subtitle, w - 52), textX, y + 17, subColor, false);
+            g.drawString(font, ellipsize(font, subtitle, w - 52), textX, y + 17, subColor, false);
 
             String chevron = this.expanded ? "v" : ">";
             int chevColor = this.isHovered || this.expanded ? BurrowUi.TEXT_PRIMARY : BurrowUi.TEXT_MUTED;
-            g.text(font, chevron, x + w - 12, y + 11, chevColor, false);
+            g.drawString(font, chevron, x + w - 12, y + 11, chevColor, false);
         }
 
         @Override
-        public void onClick(MouseButtonEvent event, boolean doubleClick) {
-            playButtonClickSound(Minecraft.getInstance().getSoundManager());
+        public void onClick(double mouseX, double mouseY) {
+            playDownSound(Minecraft.getInstance().getSoundManager());
             this.onToggle.run();
         }
 
@@ -841,7 +839,7 @@ public class BurrowFriendsScreen extends Screen {
 
         private final Screen parent;
         private final FriendsState.Listener listener = () -> {
-            if (this.minecraft != null && this.minecraft.gui.screen() == this) {
+            if (this.minecraft != null && this.minecraft.screen == this) {
                 syncTypedName();
                 rebuildWidgets();
             }
@@ -952,18 +950,18 @@ public class BurrowFriendsScreen extends Screen {
         }
 
         @Override
-        public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-            super.extractBackground(g, mouseX, mouseY, partialTick);
+        public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+            super.renderBackground(g, mouseX, mouseY, partialTick);
             BurrowUi.drawModalPanel(g, this.modalX, this.modalY, MODAL_W, MODAL_H);
-            g.text(this.font, "Add Friend & Requests", this.innerX, this.modalY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
+            g.drawString(this.font, "Add Friend & Requests", this.innerX, this.modalY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
 
             String flash = BurrowClient.friends().errorFlash();
             this.showingFlash = (flash != null);
             if (flash != null) {
-                g.text(this.font, ellipsize(this.font, "! " + flash, this.innerW),
+                g.drawString(this.font, ellipsize(this.font, "! " + flash, this.innerW),
                         this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, 0xFFFF9977, false);
             } else {
-                g.text(this.font, "Add by username or manage pending requests",
+                g.drawString(this.font, "Add by username or manage pending requests",
                         this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
             }
 
@@ -971,14 +969,14 @@ public class BurrowFriendsScreen extends Screen {
 
             for (RequestRowDisplay c : this.rows) {
                 g.fill(c.x(), c.y(), c.x() + c.w(), c.y() + c.h(), BurrowUi.CARD_BG);
-                g.outline(c.x(), c.y(), c.w(), c.h(), BurrowUi.CARD_BORDER);
+                g.renderOutline(c.x(), c.y(), c.w(), c.h(), BurrowUi.CARD_BORDER);
                 PlayerHeads.draw(g, c.uuid(), c.name(), c.x() + 5, c.y() + 4, 20);
-                g.text(this.font, c.name(), c.x() + 31, c.y() + 5, BurrowUi.TEXT_PRIMARY, true);
-                g.text(this.font, c.subtitle(), c.x() + 31, c.y() + 16, BurrowUi.TEXT_SECONDARY, false);
+                g.drawString(this.font, c.name(), c.x() + 31, c.y() + 5, BurrowUi.TEXT_PRIMARY, true);
+                g.drawString(this.font, c.subtitle(), c.x() + 31, c.y() + 16, BurrowUi.TEXT_SECONDARY, false);
             }
 
             if (this.emptyMsg != null) {
-                g.centeredText(this.font, this.emptyMsg,
+                g.drawCenteredString(this.font, this.emptyMsg,
                         this.modalX + MODAL_W / 2, this.modalY + INSET_TOP + 88, BurrowUi.TEXT_MUTED);
             }
         }
@@ -1003,13 +1001,13 @@ public class BurrowFriendsScreen extends Screen {
         }
 
         @Override
-        public boolean keyPressed(KeyEvent event) {
+        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
             if (this.nameBox != null && this.nameBox.isFocused()
-                    && (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER)) {
+                    && (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER)) {
                 sendRequest();
                 return true;
             }
-            return super.keyPressed(event);
+            return super.keyPressed(keyCode, scanCode, modifiers);
         }
 
         void syncTypedName() {
@@ -1032,7 +1030,7 @@ public class BurrowFriendsScreen extends Screen {
         @Override
         public void onClose() {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(this.parent);
+                this.minecraft.setScreen(this.parent);
             }
         }
     }
@@ -1070,19 +1068,19 @@ public class BurrowFriendsScreen extends Screen {
         }
 
         @Override
-        public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-            super.extractBackground(g, mouseX, mouseY, partialTick);
+        public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+            super.renderBackground(g, mouseX, mouseY, partialTick);
             BurrowUi.drawModalPanel(g, this.modalX, this.modalY, MODAL_W, MODAL_H);
-            g.text(this.font, "Remove Friend", this.modalX + 10, this.modalY + 11, BurrowUi.TEXT_PRIMARY, true);
+            g.drawString(this.font, "Remove Friend", this.modalX + 10, this.modalY + 11, BurrowUi.TEXT_PRIMARY, true);
             PlayerHeads.draw(g, this.friend.uuid(), this.friend.name(), this.modalX + 12, this.modalY + 35, 20);
-            g.text(this.font, "Remove " + this.friend.name() + "?",
+            g.drawString(this.font, "Remove " + this.friend.name() + "?",
                     this.modalX + 40, this.modalY + 41, BurrowUi.TEXT_SECONDARY, false);
         }
 
         @Override
         public void onClose() {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(this.parent);
+                this.minecraft.setScreen(this.parent);
             }
         }
     }

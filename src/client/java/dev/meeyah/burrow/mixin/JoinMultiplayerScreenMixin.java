@@ -15,8 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Keeps the Burrow Worlds section at the bottom of the Multiplayer screen
- * synced in real time and ensures the header / incompatible worlds can't be
- * joined via the "Join Server" button.
+ * synced in real time, lets "Join Server" join a selected Burrow world, and
+ * ensures the header / incompatible worlds can't be joined.
  */
 @Mixin(JoinMultiplayerScreen.class)
 public abstract class JoinMultiplayerScreenMixin {
@@ -65,6 +65,18 @@ public abstract class JoinMultiplayerScreenMixin {
             this.selectButton.active = false;
         } else if (selected instanceof BurrowMultiplayerWorlds.WorldEntry we && we.world().versionMismatch()) {
             this.selectButton.active = false;
+        }
+    }
+
+    @Inject(method = "joinSelectedServer", at = @At("HEAD"), cancellable = true)
+    private void burrow$joinSelectedBurrowWorld(CallbackInfo ci) {
+        if (this.serverSelectionList == null) {
+            return;
+        }
+        ServerSelectionList.Entry selected = this.serverSelectionList.getSelected();
+        if (selected instanceof BurrowMultiplayerWorlds.WorldEntry we) {
+            we.join();
+            ci.cancel();
         }
     }
 

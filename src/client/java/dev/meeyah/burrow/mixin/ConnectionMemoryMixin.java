@@ -26,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Connection.class)
 public abstract class ConnectionMemoryMixin {
     @Shadow
-    private volatile Channel channel;
+    private Channel channel;
 
     @Inject(method = "isMemoryConnection", at = @At("HEAD"), cancellable = true)
     private void burrow$tunnelConnectionsAreRemote(CallbackInfoReturnable<Boolean> cir) {
