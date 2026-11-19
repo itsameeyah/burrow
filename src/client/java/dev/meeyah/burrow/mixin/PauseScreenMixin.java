@@ -2,6 +2,7 @@ package dev.meeyah.burrow.mixin;
 
 import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.ui.BurrowFriendsScreen;
+import dev.meeyah.burrow.ui.BurrowUi;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,8 +19,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Repurposes the Pause Menu's "Open to LAN" button as Burrow's "Host World" /
- * "Host Settings" control panel, and adds a "Friends" button aligned with the
- * vanilla Pause Menu grid.
+ * "Host Settings" control panel (keeping it accessible while hosting), and
+ * adds a compact 20x20 Friends icon button beside the Options / Host World row.
  */
 @Mixin(PauseScreen.class)
 public abstract class PauseScreenMixin extends Screen {
@@ -65,14 +66,14 @@ public abstract class PauseScreenMixin extends Screen {
         if (this.disconnectButton == null) {
             return;
         }
-        int x = this.disconnectButton.getX();
-        int y = this.disconnectButton.getY();
-        int w = this.disconnectButton.getWidth();
-        this.disconnectButton.setY(y + 24);
-        this.addRenderableWidget(Button.builder(Component.literal("Friends"), b -> {
-            if (this.minecraft != null) {
-                this.minecraft.setScreen(new BurrowFriendsScreen(this));
-            }
-        }).bounds(x, y, w, 20).build());
+        int x = this.disconnectButton.getX() + this.disconnectButton.getWidth() + 4;
+        int y = this.disconnectButton.getY() - 24;
+        this.addRenderableWidget(new BurrowUi.FriendsButton(
+                x, y,
+                () -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.setScreen(new BurrowFriendsScreen(this));
+                    }
+                }));
     }
 }
