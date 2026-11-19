@@ -49,9 +49,13 @@ public final class BurrowUi {
         g.blitSprite(RenderPipelines.GUI_TEXTURED, PANEL_BG, x, y, w, h);
     }
 
-    /** Recessed dark container inside a modal panel. */
+    /** Clean, flat recessed dark container inside a modal panel (no double grey frame). */
     public static void drawInsetBox(GuiGraphicsExtractor g, int x, int y, int w, int h) {
-        g.blitSprite(RenderPipelines.GUI_TEXTURED, PANEL_DARK, x, y, w, h);
+        g.fill(x, y, x + w, y + h, 0x88141418);
+        g.outline(x, y, w, h, 0xCC0A0A0D);
+        // Subtle 1px inner highlight along bottom/right for a crisp recessed feel
+        g.horizontalLine(x + 1, x + w - 2, y + h - 1, 0x22FFFFFF);
+        g.verticalLine(x + w - 1, y + 1, y + h - 2, 0x18FFFFFF);
     }
 
     /** Small pill badge with optional leading status dot (aligned to rightX). */
