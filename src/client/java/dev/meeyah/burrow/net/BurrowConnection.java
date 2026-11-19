@@ -116,6 +116,7 @@ public final class BurrowConnection {
                 LOG.debug("websocket error", ex);
             }
         };
+        ws.setDaemon(true);
         this.client = ws;
         try {
             if (!ws.connectBlocking(10, TimeUnit.SECONDS)) {

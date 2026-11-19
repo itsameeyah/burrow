@@ -51,6 +51,7 @@ public class BurrowFriendsScreen extends Screen {
         Font font = mc.font;
 
         LinearLayout layout = LinearLayout.vertical().spacing(ROW_SPACING);
+        layout.defaultCellSetting().alignHorizontallyCenter();
 
         layout.addChild(new StringWidget(Component.literal("Burrow — Friends"), font));
         layout.addChild(new StringWidget(LIST_WIDTH, 9, statusComponent(), font));
@@ -110,7 +111,7 @@ public class BurrowFriendsScreen extends Screen {
         }
 
         // ----- add friend -----
-        this.nameBox = new EditBox(font, 140, 18, Component.literal("Add friend"));
+        this.nameBox = new EditBox(font, 144, 20, Component.literal("Add friend"));
         this.nameBox.setMaxLength(32);
         this.nameBox.setHint(Component.literal("Profile name"));
         this.nameBox.setValue(this.typedName);
@@ -142,8 +143,9 @@ public class BurrowFriendsScreen extends Screen {
         layout.addChild(Button.builder(Component.literal("Done"), b -> onClose())
                 .width(LIST_WIDTH).build());
 
-        layout.visitWidgets(w -> addRenderableWidget(w));
+        layout.arrangeElements();
         FrameLayout.alignInRectangle(layout, this.getRectangle(), 0.5F, 0.5F);
+        layout.visitWidgets(this::addRenderableWidget);
         setInitialFocus(this.nameBox);
     }
 
@@ -296,8 +298,9 @@ public class BurrowFriendsScreen extends Screen {
                 }).width(LIST_WIDTH).build());
             }
             layout.addChild(Button.builder(Component.literal("Back"), b -> onClose()).width(LIST_WIDTH).build());
-            layout.visitWidgets(w -> addRenderableWidget(w));
+            layout.arrangeElements();
             FrameLayout.alignInRectangle(layout, this.getRectangle(), 0.5F, 0.5F);
+            layout.visitWidgets(this::addRenderableWidget);
         }
 
         @Override
@@ -330,8 +333,9 @@ public class BurrowFriendsScreen extends Screen {
             }).width(LIST_WIDTH).build());
             layout.addChild(Button.builder(Component.literal("Cancel"), b -> onClose())
                     .width(LIST_WIDTH).build());
-            layout.visitWidgets(w -> addRenderableWidget(w));
+            layout.arrangeElements();
             FrameLayout.alignInRectangle(layout, this.getRectangle(), 0.5F, 0.5F);
+            layout.visitWidgets(this::addRenderableWidget);
         }
 
         @Override

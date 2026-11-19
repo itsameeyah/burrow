@@ -5,6 +5,7 @@ import dev.meeyah.burrow.net.BurrowConnection;
 import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.state.FriendsState;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 
 /**
@@ -30,6 +31,11 @@ public class BurrowClient implements ClientModInitializer {
         // Tear down hosting + stale server channel initializer whenever the
         // integrated server shuts down (world exit, quit to title, world switch).
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> HostSession.onServerStopping());
+        // Close sockets cleanly on game exit so Java-WebSocket threads never hang shutdown.
+        ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            HostSession.onServerStopping();
+            connection.stop();
+        });
 
         if (config.connectAutomatically) {
             connection.connectAsync();
