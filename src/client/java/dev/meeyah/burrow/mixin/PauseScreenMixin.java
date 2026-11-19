@@ -2,6 +2,7 @@ package dev.meeyah.burrow.mixin;
 
 import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.ui.BurrowFriendsScreen;
+import dev.meeyah.burrow.ui.BurrowUi;
 import dev.meeyah.burrow.ui.HostWorldScreen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.PauseScreen;
@@ -63,12 +64,14 @@ public abstract class PauseScreenMixin extends Screen {
         if (this.disconnectButton == null) {
             return;
         }
-        int x = this.disconnectButton.getRight() + 4;
+        int x = this.disconnectButton.getX() + this.disconnectButton.getWidth() + 4;
         int y = this.disconnectButton.getY() - 24;
-        this.addRenderableWidget(Button.builder(
-                        Component.literal("Friends"),
-                        b -> this.minecraft.setScreen(new BurrowFriendsScreen(this)))
-                .bounds(x, y, 54, 20)
-                .build());
+        this.addRenderableWidget(new BurrowUi.FriendsButton(
+                x, y,
+                () -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.setScreen(new BurrowFriendsScreen(this));
+                    }
+                }));
     }
 }

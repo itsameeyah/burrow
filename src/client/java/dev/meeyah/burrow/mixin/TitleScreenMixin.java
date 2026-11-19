@@ -1,7 +1,7 @@
 package dev.meeyah.burrow.mixin;
 
 import dev.meeyah.burrow.ui.BurrowFriendsScreen;
-import net.minecraft.client.gui.components.Button;
+import dev.meeyah.burrow.ui.BurrowUi;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
@@ -11,9 +11,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Adds a compact vanilla-styled "Friends" button beside the Multiplayer button
- * on the Title Screen (aligned with the right-side Accessibility button column)
- * that opens Burrow's Friends screen directly.
+ * Adds a compact 20x20 vanilla-styled Friends icon button beside the
+ * Multiplayer button on the Title Screen (aligned with the right-side
+ * Accessibility icon column) that opens Burrow's Friends screen directly.
  */
 @Mixin(TitleScreen.class)
 public abstract class TitleScreenMixin extends Screen {
@@ -25,10 +25,12 @@ public abstract class TitleScreenMixin extends Screen {
     private void burrow$addFriendsButton(CallbackInfo ci) {
         int x = this.width / 2 + 104;
         int y = this.height / 4 + 48 + 24;
-        this.addRenderableWidget(Button.builder(
-                        Component.literal("Friends"),
-                        b -> this.minecraft.setScreen(new BurrowFriendsScreen(this)))
-                .bounds(x, y, 54, 20)
-                .build());
+        this.addRenderableWidget(new BurrowUi.FriendsButton(
+                x, y,
+                () -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.setScreen(new BurrowFriendsScreen(this));
+                    }
+                }));
     }
 }
