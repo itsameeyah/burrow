@@ -1,7 +1,10 @@
 package dev.meeyah.burrow.net;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.Collection;
 import java.util.UUID;
 
 /**
@@ -20,6 +23,7 @@ public final class Protocol {
     public static final String OP_FRIEND_DECLINE = "friend.decline";
     public static final String OP_FRIEND_REMOVE = "friend.remove";
     public static final String OP_SESSION_OPEN = "session.open";
+    public static final String OP_SESSION_UPDATE = "session.update";
     public static final String OP_SESSION_CLOSE = "session.close";
     public static final String OP_SESSION_INVITE = "session.invite";
     public static final String OP_JOIN_BEGIN = "join.begin";
@@ -67,13 +71,35 @@ public final class Protocol {
         return o;
     }
 
-    /** Host announces a shareable world session. */
-    public static JsonObject sessionOpen(String worldName, String gameVersion, String modsHash, int maxPlayers) {
-        JsonObject o = msg(OP_SESSION_OPEN);
+    /** Host announces or updates a shareable world session. */
+    public static JsonObject sessionPayload(
+            String op,
+            String worldName,
+            String gameVersion,
+            String modsHash,
+            String access,
+            String invitePerm,
+            boolean locked,
+            int maxPlayers,
+            int playerCount,
+            Collection<UUID> operators,
+            Collection<UUID> banned
+    ) {
+        JsonObject o = msg(op);
         o.addProperty("worldName", worldName);
         o.addProperty("gameVersion", gameVersion);
         o.addProperty("modsHash", modsHash);
+        o.addProperty("access", access);
+        o.addProperty("invitePerm", invitePerm);
+        o.addProperty("locked", locked);
         o.addProperty("maxPlayers", maxPlayers);
+        o.addProperty("playerCount", playerCount);
+        JsonArray opsArr = new JsonArray();
+        for (UUID u : operators) opsArr.add(u.toString());
+        o.add("operators", opsArr);
+        JsonArray banArr = new JsonArray();
+        for (UUID u : banned) banArr.add(u.toString());
+        o.add("banned", banArr);
         return o;
     }
 
@@ -81,9 +107,12 @@ public final class Protocol {
         return msg(OP_SESSION_CLOSE);
     }
 
-    public static JsonObject sessionInvite(UUID friendId) {
+    public static JsonObject sessionInvite(UUID targetId, @Nullable UUID hostId) {
         JsonObject o = msg(OP_SESSION_INVITE);
-        o.addProperty("uuid", friendId.toString());
+        o.addProperty("uuid", targetId.toString());
+        if (hostId != null) {
+            o.addProperty("host", hostId.toString());
+        }
         return o;
     }
 

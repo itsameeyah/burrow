@@ -16,16 +16,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.net.SocketAddress;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Host side of Burrow: shares the current singleplayer world with friends.
- *
- * Flow: publish the world to the LAN scope (this makes vanilla bind its
- * server channel, letting our mixin capture the game's own channel
- * initializer), attach a private in-process endpoint wired to that exact
- * initializer, announce the session, and when friends join, bridge each
- * relay websocket to the private endpoint — one tunnel per joiner.
+ * Host side of Burrow: shares the current singleplayer world with friends
+ * (or invitees / friends-of-friends / open) and owns the per-world
+ * {@link HostWorldState} (access mode, lock, cap, roles, bans, join sources).
  */
 public final class HostSession {
     /** Local address id of the private host endpoint; the auth mixin matches on it. */
@@ -34,10 +31,14 @@ public final class HostSession {
     private static volatile @Nullable ChannelHandler capturedInitializer;
     private static volatile @Nullable Channel localServer;
     private static volatile @Nullable SocketAddress localEndpoint;
+    private static volatile @Nullable MinecraftServer stateServer;
+    private static volatile @Nullable HostWorldState currentState;
     private static volatile boolean wePublished;
     private static volatile boolean hosting;
     /** One tunnel per relay room (one per joining friend). */
     private static final Map<String, RelayTunnel> TUNNELS = new ConcurrentHashMap<>();
+    /** Latest tunnel per joiner UUID so kick/ban can immediately sever their relay socket. */
+    private static final Map<UUID, RelayTunnel> TUNNELS_BY_PLAYER = new ConcurrentHashMap<>();
 
     private HostSession() {}
 
@@ -50,6 +51,23 @@ public final class HostSession {
         return hosting;
     }
 
+    /** Lazy-loaded per-world HostWorldState for the active integrated server. */
+    public static synchronized @Nullable HostWorldState worldState(@Nullable MinecraftServer server) {
+        if (server == null) {
+            return null;
+        }
+        if (stateServer != server || currentState == null) {
+            stateServer = server;
+            currentState = HostWorldState.load(server);
+        }
+        return currentState;
+    }
+
+    public static synchronized @Nullable HostWorldState worldState() {
+        Minecraft mc = Minecraft.getInstance();
+        return mc == null ? null : worldState(mc.getSingleplayerServer());
+    }
+
     public static synchronized void start() {
         Minecraft mc = Minecraft.getInstance();
         IntegratedServer server = mc.getSingleplayerServer();
@@ -57,10 +75,13 @@ public final class HostSession {
         if (server == null || hosting || connection == null) {
             return;
         }
+        HostWorldState state = worldState(server);
+        if (state == null) {
+            return;
+        }
 
         // Publish to the LAN scope so the game creates its real server
         // channel — and our mixin captures the initializer during the bind.
-        // Remember whether WE published, so stopping only unpublishes ours.
         if (!server.isPublished()) {
             if (server.publishServer(MinecraftServer.MultiplayerScope.LAN, null, false, 0)) {
                 wePublished = true;
@@ -68,13 +89,9 @@ public final class HostSession {
         }
         ChannelHandler initializer = capturedInitializer;
         if (initializer == null) {
-            return; // could not capture; not fatal, just not shareable
+            return;
         }
 
-        // A private in-process endpoint using the captured vanilla pipeline:
-        // tunnels reaching it are indistinguishable from real LAN sockets.
-        // The Connection auth mixin marks exactly these connections as
-        // remote, so friends get full Mojang authentication + encryption.
         if (localServer == null || !localServer.isActive()) {
             localServer = new ServerBootstrap()
                     .group(EventLoopGroupHolder.local().eventLoopGroup())
@@ -87,20 +104,21 @@ public final class HostSession {
         }
         localEndpoint = localServer.localAddress();
 
-        String worldName = safeWorldName(server);
-        String gameVersion = BurrowClient.minecraftVersion();
         hosting = true;
-        connection.sessionOpen(worldName, gameVersion, 10);
+        sendSession(connection, server, state, true, Math.max(1, server.getPlayerCount()));
     }
 
     public static synchronized void stop() {
         if (!hosting) {
-            // Still clean up any straggler state.
             closeTunnels();
             closeLocalServer();
             return;
         }
         hosting = false;
+        HostWorldState state = currentState;
+        if (state != null) {
+            state.setLocked(false);
+        }
         closeTunnels();
         closeLocalServer();
 
@@ -108,6 +126,33 @@ public final class HostSession {
         if (connection != null) {
             connection.sessionClose();
         }
+    }
+
+    /** Push updated settings/lock/bans/roles/player count to the Burrow server if hosting. */
+    public static synchronized void syncState() {
+        if (!hosting) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        IntegratedServer server = mc == null ? null : mc.getSingleplayerServer();
+        if (server == null) {
+            return;
+        }
+        syncStateWithCount(Math.max(1, server.getPlayerCount()));
+    }
+
+    public static synchronized void syncStateWithCount(int playerCount) {
+        if (!hosting) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        IntegratedServer server = mc == null ? null : mc.getSingleplayerServer();
+        BurrowConnection connection = BurrowClient.connection();
+        HostWorldState state = worldState(server);
+        if (server == null || connection == null || state == null) {
+            return;
+        }
+        sendSession(connection, server, state, false, Math.max(1, playerCount));
     }
 
     /** Belt-and-braces cleanup when the singleplayer world itself goes away. */
@@ -125,15 +170,17 @@ public final class HostSession {
         ensureStopped();
         capturedInitializer = null;
         wePublished = false;
+        stateServer = null;
+        currentState = null;
     }
 
     /** After a signaling reconnect, re-announce an ongoing hosting session. */
-    public static void reannounce() {
+    public static synchronized void reannounce() {
         if (!hosting) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
-        IntegratedServer server = mc.getSingleplayerServer();
+        IntegratedServer server = mc == null ? null : mc.getSingleplayerServer();
         BurrowConnection connection = BurrowClient.connection();
         if (server == null) {
             hosting = false;
@@ -141,30 +188,89 @@ public final class HostSession {
             closeLocalServer();
             return;
         }
-        if (connection != null) {
-            connection.sessionOpen(safeWorldName(server), BurrowClient.minecraftVersion(), 10);
+        HostWorldState state = worldState(server);
+        if (connection != null && state != null) {
+            sendSession(connection, server, state, true, Math.max(1, server.getPlayerCount()));
         }
     }
 
-    /** The Burrow server told us a friend is joining — open one relay tunnel as host. */
-    public static void onRelayHost(String roomId, String token, String relayPath) {
+    /** The Burrow server told us a player is joining — record join metadata and open a relay tunnel. */
+    public static void onRelayHost(
+            String roomId,
+            String token,
+            String relayPath,
+            @Nullable UUID joinerUuid,
+            @Nullable String joinSource,
+            @Nullable String viaName
+    ) {
         if (!hosting || localEndpoint == null) {
             return;
         }
+        HostWorldState state = worldState();
+        if (state != null && joinerUuid != null) {
+            if (state.isBanned(joinerUuid) || state.locked()) {
+                return;
+            }
+            if (joinSource != null) {
+                state.recordJoinInfo(joinerUuid, joinSource, viaName);
+            }
+        }
         String url = relayUrl(relayPath, roomId, token);
         Thread worker = new Thread(() -> {
-            RelayTunnel tunnel = new RelayTunnel(RelayTunnel.Mode.HOST, url, localEndpoint,
-                    () -> TUNNELS.remove(roomId));
-            TUNNELS.put(roomId, tunnel); // register before connecting so stop() can reach it
+            RelayTunnel tunnel = new RelayTunnel(RelayTunnel.Mode.HOST, url, localEndpoint, () -> {
+                TUNNELS.remove(roomId);
+                if (joinerUuid != null) {
+                    TUNNELS_BY_PLAYER.remove(joinerUuid);
+                }
+            });
+            TUNNELS.put(roomId, tunnel);
+            if (joinerUuid != null) {
+                TUNNELS_BY_PLAYER.put(joinerUuid, tunnel);
+            }
             try {
                 tunnel.connectBlocking(10);
             } catch (Throwable t) {
                 tunnel.close();
                 TUNNELS.remove(roomId);
+                if (joinerUuid != null) {
+                    TUNNELS_BY_PLAYER.remove(joinerUuid, tunnel);
+                }
             }
         }, "burrow-host-relay");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    public static void closeTunnelForPlayer(UUID uuid) {
+        if (uuid == null) return;
+        RelayTunnel tunnel = TUNNELS_BY_PLAYER.remove(uuid);
+        if (tunnel != null) {
+            tunnel.close();
+        }
+    }
+
+    private static void sendSession(
+            BurrowConnection connection,
+            IntegratedServer server,
+            HostWorldState state,
+            boolean open,
+            int playerCount
+    ) {
+        String worldName = safeWorldName(server);
+        String gameVersion = BurrowClient.minecraftVersion();
+        if (open) {
+            connection.sessionOpen(
+                    worldName, gameVersion,
+                    state.access().wire(), state.invitePerm().wire(),
+                    state.locked(), state.maxPlayers(), playerCount,
+                    state.operatorUuids(), state.bannedUuids());
+        } else {
+            connection.sessionUpdate(
+                    worldName, gameVersion,
+                    state.access().wire(), state.invitePerm().wire(),
+                    state.locked(), state.maxPlayers(), playerCount,
+                    state.operatorUuids(), state.bannedUuids());
+        }
     }
 
     private static void closeTunnels() {
@@ -172,6 +278,7 @@ public final class HostSession {
             tunnel.close();
         }
         TUNNELS.clear();
+        TUNNELS_BY_PLAYER.clear();
     }
 
     private static void closeLocalServer() {
@@ -193,7 +300,7 @@ public final class HostSession {
         return BurrowClient.relayBase() + relayPath + "?room=" + roomId + "&token=" + token;
     }
 
-    private static String safeWorldName(IntegratedServer server) {
+    public static String safeWorldName(IntegratedServer server) {
         try {
             String name = server.getWorldData().getLevelName();
             if (name != null && !name.isBlank()) {

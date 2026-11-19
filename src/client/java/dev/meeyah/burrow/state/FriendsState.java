@@ -7,17 +7,62 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Client-side model of the friends list. The connection layer mutates it;
- * the friends screen observes it through {@link Listener}.
+ * Client-side model of the friends list, incoming/outgoing requests,
+ * discoverable non-friend worlds (friends-of-friends / open), and world invites.
+ * The connection layer mutates it; screens observe it through {@link Listener}.
  */
 public final class FriendsState {
-    public record Friend(UUID uuid, String name, String presence, boolean hosting, String worldName) {}
+    public record Friend(
+            UUID uuid,
+            String name,
+            String presence,
+            boolean hosting,
+            String worldName,
+            String access,
+            boolean locked,
+            int playerCount,
+            int maxPlayers
+    ) {
+        public Friend(UUID uuid, String name, String presence, boolean hosting, String worldName) {
+            this(uuid, name, presence, hosting, worldName, "", false, 0, 0);
+        }
+    }
 
     public record Request(UUID uuid, String name, boolean outgoing) {}
 
+    public record DiscoverableWorld(
+            UUID host,
+            String hostName,
+            String worldName,
+            String access,
+            String source,
+            String viaName,
+            boolean locked,
+            int playerCount,
+            int maxPlayers
+    ) {}
+
+    public record WorldInvite(
+            UUID host,
+            String hostName,
+            String worldName,
+            String invitedByName
+    ) {}
+
     public record PresenceUpdate(UUID uuid, String presence, boolean hosting, String worldName) {}
 
-    public record SessionUpdate(UUID host, boolean active, String worldName) {}
+    public record SessionUpdate(
+            UUID host,
+            String hostName,
+            boolean active,
+            String worldName,
+            String access,
+            String source,
+            String viaName,
+            boolean locked,
+            int playerCount,
+            int maxPlayers
+    ) {}
 
     public interface Listener {
         void friendsChanged();
@@ -25,6 +70,8 @@ public final class FriendsState {
 
     private final List<Friend> friends = new CopyOnWriteArrayList<>();
     private final List<Request> requests = new CopyOnWriteArrayList<>();
+    private final List<DiscoverableWorld> discoverable = new CopyOnWriteArrayList<>();
+    private final List<WorldInvite> invites = new CopyOnWriteArrayList<>();
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private volatile UUID selfUuid;
     private volatile String selfName;
@@ -45,6 +92,22 @@ public final class FriendsState {
 
     public List<Request> requests() {
         return List.copyOf(requests);
+    }
+
+    public List<DiscoverableWorld> discoverableWorlds() {
+        return List.copyOf(discoverable);
+    }
+
+    public List<WorldInvite> worldInvites() {
+        return List.copyOf(invites);
+    }
+
+    public boolean isFriend(UUID uuid) {
+        if (uuid == null) return false;
+        for (Friend f : friends) {
+            if (uuid.equals(f.uuid())) return true;
+        }
+        return false;
     }
 
     public UUID selfUuid() {
@@ -77,13 +140,34 @@ public final class FriendsState {
         return err;
     }
 
-    public void replaceAll(List<Friend> newFriends, List<Request> incoming, List<Request> outgoing) {
+    public void replaceAll(
+            List<Friend> newFriends,
+            List<Request> incoming,
+            List<Request> outgoing,
+            List<DiscoverableWorld> newDiscoverable
+    ) {
         friends.clear();
         friends.addAll(newFriends);
         requests.clear();
         requests.addAll(incoming);
         requests.addAll(outgoing);
+        discoverable.clear();
+        discoverable.addAll(newDiscoverable);
         fireChanged();
+    }
+
+    public void addInvite(WorldInvite invite) {
+        if (invite.host() == null) return;
+        invites.removeIf(existing -> invite.host().equals(existing.host()));
+        invites.add(invite);
+        fireChanged();
+    }
+
+    public void dismissInvite(UUID host) {
+        if (host == null) return;
+        if (invites.removeIf(existing -> host.equals(existing.host()))) {
+            fireChanged();
+        }
     }
 
     public void applyPresence(List<PresenceUpdate> updates) {
@@ -98,7 +182,11 @@ public final class FriendsState {
                             f.name(),
                             u.presence() != null ? u.presence() : f.presence(),
                             u.hosting(),
-                            u.worldName() != null ? u.worldName() : f.worldName()));
+                            u.worldName() != null ? u.worldName() : f.worldName(),
+                            u.hosting() ? f.access() : "",
+                            u.hosting() && f.locked(),
+                            u.hosting() ? f.playerCount() : 0,
+                            u.hosting() ? f.maxPlayers() : 0));
                     changed = true;
                     break;
                 }
@@ -112,7 +200,8 @@ public final class FriendsState {
     public void applySessions(List<SessionUpdate> updates) {
         boolean changed = false;
         for (SessionUpdate u : updates) {
-            if (u.host() == null) continue;
+            if (u.host() == null || u.host().equals(selfUuid)) continue;
+            boolean matchedFriend = false;
             for (int i = 0; i < friends.size(); i++) {
                 Friend f = friends.get(i);
                 if (u.host().equals(f.uuid())) {
@@ -121,9 +210,37 @@ public final class FriendsState {
                             f.name(),
                             u.active() ? "online" : f.presence(),
                             u.active(),
-                            u.active() && u.worldName() != null ? u.worldName() : ""));
+                            u.active() && u.worldName() != null ? u.worldName() : "",
+                            u.active() && u.access() != null ? u.access() : "",
+                            u.active() && u.locked(),
+                            u.active() ? u.playerCount() : 0,
+                            u.active() ? u.maxPlayers() : 0));
+                    matchedFriend = true;
                     changed = true;
                     break;
+                }
+            }
+            if (!u.active()) {
+                if (invites.removeIf(inv -> u.host().equals(inv.host()))) {
+                    changed = true;
+                }
+            }
+            if (!matchedFriend) {
+                boolean removed = discoverable.removeIf(d -> u.host().equals(d.host()));
+                if (u.active()) {
+                    discoverable.add(new DiscoverableWorld(
+                            u.host(),
+                            u.hostName() != null ? u.hostName() : "?",
+                            u.worldName() != null ? u.worldName() : "a world",
+                            u.access() != null ? u.access() : "",
+                            u.source() != null ? u.source() : "",
+                            u.viaName() != null ? u.viaName() : "",
+                            u.locked(),
+                            u.playerCount(),
+                            u.maxPlayers()));
+                    changed = true;
+                } else if (removed) {
+                    changed = true;
                 }
             }
         }

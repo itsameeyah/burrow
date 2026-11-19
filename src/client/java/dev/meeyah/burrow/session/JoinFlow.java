@@ -47,8 +47,13 @@ public final class JoinFlow {
     }
 
     public static void begin(FriendsState.Friend host) {
-        if (BurrowClient.connection() != null) {
-            BurrowClient.connection().joinBegin(host.uuid());
+        beginByHostUuid(host.uuid());
+    }
+
+    public static void beginByHostUuid(UUID hostUuid) {
+        if (hostUuid != null && BurrowClient.connection() != null) {
+            BurrowClient.friends().dismissInvite(hostUuid);
+            BurrowClient.connection().joinBegin(hostUuid);
         }
     }
 
@@ -97,6 +102,16 @@ public final class JoinFlow {
         for (FriendsState.Friend f : BurrowClient.friends().friends()) {
             if (uuid.equals(f.uuid())) {
                 return f.name();
+            }
+        }
+        for (FriendsState.DiscoverableWorld d : BurrowClient.friends().discoverableWorlds()) {
+            if (uuid.equals(d.host())) {
+                return d.hostName();
+            }
+        }
+        for (FriendsState.WorldInvite inv : BurrowClient.friends().worldInvites()) {
+            if (uuid.equals(inv.host())) {
+                return inv.hostName();
             }
         }
         return null;

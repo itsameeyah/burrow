@@ -2,6 +2,7 @@ package dev.meeyah.burrow;
 
 import dev.meeyah.burrow.config.BurrowConfig;
 import dev.meeyah.burrow.net.BurrowConnection;
+import dev.meeyah.burrow.session.HostPermissions;
 import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.state.FriendsState;
 import net.fabricmc.api.ClientModInitializer;
@@ -27,6 +28,7 @@ public class BurrowClient implements ClientModInitializer {
         config = BurrowConfig.load();
         friends = new FriendsState();
         connection = new BurrowConnection(config, friends);
+        HostPermissions.register();
 
         // Tear down hosting + stale server channel initializer whenever the
         // integrated server shuts down (world exit, quit to title, world switch).

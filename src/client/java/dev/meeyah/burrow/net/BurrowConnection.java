@@ -173,11 +173,21 @@ public final class BurrowConnection {
                 List<FriendsState.Friend> friends = parseFriends(array(msg, "friends"));
                 List<FriendsState.Request> incoming = parseRequests(array(msg, "incoming"), false);
                 List<FriendsState.Request> outgoing = parseRequests(array(msg, "outgoing"), true);
-                state.replaceAll(friends, incoming, outgoing);
+                List<FriendsState.DiscoverableWorld> discoverable = parseDiscoverable(array(msg, "discoverable"));
+                state.replaceAll(friends, incoming, outgoing, discoverable);
             }
             case Protocol.OP_PRESENCE_BATCH -> state.applyPresence(parsePresence(array(msg, "updates")));
             case Protocol.OP_SESSION_STATE -> state.applySessions(parseSessions(array(msg, "sessions")));
-            case Protocol.OP_INVITE_RECEIVED -> LOG.info("invite received: {}", msg);
+            case Protocol.OP_INVITE_RECEIVED -> {
+                UUID host = uuid(msg, "host");
+                if (host != null) {
+                    state.addInvite(new FriendsState.WorldInvite(
+                            host,
+                            strOr(msg, "hostName", "?"),
+                            strOr(msg, "worldName", "a world"),
+                            strOr(msg, "invitedByName", "?")));
+                }
+            }
             case Protocol.OP_JOIN_READY -> JoinFlow.onJoinReady(
                     uuid(msg, "host"),
                     str(msg, "worldName"),
@@ -187,7 +197,10 @@ public final class BurrowConnection {
             case Protocol.OP_RELAY_HOST -> HostSession.onRelayHost(
                     str(msg, "roomId"),
                     str(msg, "token"),
-                    str(msg, "relayPath"));
+                    str(msg, "relayPath"),
+                    uuid(msg, "joinerUuid"),
+                    str(msg, "joinSource"),
+                    str(msg, "viaName"));
             case Protocol.OP_ERROR -> {
                 String message = msg.has("message") ? msg.get("message").getAsString() : msg.toString();
                 LOG.warn("server error: {}", message);
@@ -224,7 +237,32 @@ public final class BurrowConnection {
                     strOr(o, "name", "?"),
                     strOr(o, "presence", "offline"),
                     bool(o, "hosting"),
-                    str(o, "worldName")));
+                    strOr(o, "worldName", ""),
+                    strOr(o, "access", ""),
+                    bool(o, "locked"),
+                    intVal(o, "playerCount"),
+                    intVal(o, "maxPlayers")));
+        }
+        return out;
+    }
+
+    private static List<FriendsState.DiscoverableWorld> parseDiscoverable(JsonArray arr) {
+        List<FriendsState.DiscoverableWorld> out = new ArrayList<>();
+        for (JsonElement el : arr) {
+            if (!el.isJsonObject()) continue;
+            JsonObject o = el.getAsJsonObject();
+            UUID host = uuid(o, "host");
+            if (host == null) continue;
+            out.add(new FriendsState.DiscoverableWorld(
+                    host,
+                    strOr(o, "hostName", "?"),
+                    strOr(o, "worldName", "a world"),
+                    strOr(o, "access", ""),
+                    strOr(o, "source", ""),
+                    strOr(o, "viaName", ""),
+                    bool(o, "locked"),
+                    intVal(o, "playerCount"),
+                    intVal(o, "maxPlayers")));
         }
         return out;
     }
@@ -262,9 +300,27 @@ public final class BurrowConnection {
             if (host == null) {
                 host = uuid(o, "uuid");
             }
-            out.add(new FriendsState.SessionUpdate(host, bool(o, "active"), str(o, "worldName")));
+            out.add(new FriendsState.SessionUpdate(
+                    host,
+                    strOr(o, "hostName", "?"),
+                    bool(o, "active"),
+                    strOr(o, "worldName", ""),
+                    strOr(o, "access", ""),
+                    strOr(o, "source", ""),
+                    strOr(o, "viaName", ""),
+                    bool(o, "locked"),
+                    intVal(o, "playerCount"),
+                    intVal(o, "maxPlayers")));
         }
         return out;
+    }
+
+    private static int intVal(JsonObject o, String member) {
+        try {
+            return o.has(member) && o.get(member).isJsonPrimitive() ? o.get(member).getAsInt() : 0;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private static String strOr(JsonObject o, String member, String fallback) {
@@ -313,8 +369,44 @@ public final class BurrowConnection {
         send(Protocol.joinBegin(hostId));
     }
 
-    public void sessionOpen(String worldName, String gameVersion, int maxPlayers) {
-        send(Protocol.sessionOpen(worldName, gameVersion, "none", maxPlayers));
+    public void sessionOpen(
+            String worldName,
+            String gameVersion,
+            String access,
+            String invitePerm,
+            boolean locked,
+            int maxPlayers,
+            int playerCount,
+            java.util.Collection<UUID> operators,
+            java.util.Collection<UUID> banned
+    ) {
+        send(Protocol.sessionPayload(
+                Protocol.OP_SESSION_OPEN,
+                worldName, gameVersion, "none",
+                access, invitePerm, locked, maxPlayers, playerCount,
+                operators, banned));
+    }
+
+    public void sessionUpdate(
+            String worldName,
+            String gameVersion,
+            String access,
+            String invitePerm,
+            boolean locked,
+            int maxPlayers,
+            int playerCount,
+            java.util.Collection<UUID> operators,
+            java.util.Collection<UUID> banned
+    ) {
+        send(Protocol.sessionPayload(
+                Protocol.OP_SESSION_UPDATE,
+                worldName, gameVersion, "none",
+                access, invitePerm, locked, maxPlayers, playerCount,
+                operators, banned));
+    }
+
+    public void sessionInvite(UUID targetId, @org.jetbrains.annotations.Nullable UUID hostId) {
+        send(Protocol.sessionInvite(targetId, hostId));
     }
 
     public void sessionClose() {

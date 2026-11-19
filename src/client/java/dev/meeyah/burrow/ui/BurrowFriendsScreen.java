@@ -93,6 +93,35 @@ public class BurrowFriendsScreen extends Screen {
             layout.addChild(navRow);
         }
 
+        // ----- world invites (click to join) -----
+        List<FriendsState.WorldInvite> invites = BurrowClient.friends().worldInvites();
+        if (!invites.isEmpty()) {
+            layout.addChild(new StringWidget(LIST_WIDTH, 9,
+                    Component.literal("World Invites (" + invites.size() + ")"), font));
+            for (FriendsState.WorldInvite inv : invites.subList(0, Math.min(invites.size(), 4))) {
+                String label = "Join " + inv.hostName() + " — " + inv.worldName() + " (Invited)";
+                layout.addChild(Button.builder(Component.literal(label), b -> JoinFlow.beginByHostUuid(inv.host()))
+                        .width(LIST_WIDTH).build());
+            }
+        }
+
+        // ----- discoverable worlds (friends of friends / open) -----
+        List<FriendsState.DiscoverableWorld> discoverable = BurrowClient.friends().discoverableWorlds();
+        if (!discoverable.isEmpty()) {
+            layout.addChild(new StringWidget(LIST_WIDTH, 9,
+                    Component.literal("Open & Friends-of-Friends"), font));
+            for (FriendsState.DiscoverableWorld w : discoverable.subList(0, Math.min(discoverable.size(), 4))) {
+                String suffix = "friend_of_friend".equals(w.source()) && !w.viaName().isEmpty()
+                        ? " (via " + w.viaName() + ")"
+                        : " (" + ("open".equals(w.access()) ? "Open" : "Invited") + ")";
+                String label = w.hostName() + " — " + w.worldName() + suffix;
+                Button btn = Button.builder(Component.literal(label), b -> JoinFlow.beginByHostUuid(w.host()))
+                        .width(LIST_WIDTH).build();
+                btn.active = !w.locked();
+                layout.addChild(btn);
+            }
+        }
+
         // ----- pending requests (capped like the friends list) -----
         List<FriendsState.Request> requests = BurrowClient.friends().requests();
         if (!requests.isEmpty()) {
@@ -121,19 +150,12 @@ public class BurrowFriendsScreen extends Screen {
                 .width(52).build());
         layout.addChild(addRow);
 
-        // ----- share this world (only while in a singleplayer world) -----
+        // ----- host this world (only while in a singleplayer world) -----
         if (mc.getSingleplayerServer() != null) {
             boolean hosting = HostSession.isHosting();
             layout.addChild(Button.builder(
-                            Component.literal(hosting ? "Close world to friends" : "Open world to friends"),
-                            b -> {
-                                if (HostSession.isHosting()) {
-                                    HostSession.stop();
-                                } else {
-                                    HostSession.start();
-                                }
-                                rebuildWidgets();
-                            })
+                            Component.literal(hosting ? "Host World (Live)..." : "Host World..."),
+                            b -> mc.gui.setScreen(new HostWorldScreen(this)))
                     .width(LIST_WIDTH).build());
         } else {
             // Left the world without closing hosting: clean up now.
@@ -256,7 +278,10 @@ public class BurrowFriendsScreen extends Screen {
     private static Component friendLabel(FriendsState.Friend f) {
         String presence;
         if (f.hosting()) {
-            presence = "hosting " + (f.worldName() == null ? "a world" : f.worldName());
+            String count = f.maxPlayers() > 0 ? " (" + f.playerCount() + "/" + f.maxPlayers() + ")" : "";
+            String lock = f.locked() ? " [Locked]" : "";
+            presence = "hosting " + (f.worldName() == null || f.worldName().isEmpty() ? "a world" : f.worldName())
+                    + count + lock;
         } else if ("online".equalsIgnoreCase(f.presence())) {
             presence = "online";
         } else {

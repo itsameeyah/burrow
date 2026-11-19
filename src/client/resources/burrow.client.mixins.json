@@ -4,11 +4,14 @@
 	"compatibilityLevel": "JAVA_25",
 	"client": [
 		"GuiMixin",
+		"PauseScreenMixin",
 		"OnlineOptionsScreenMixin",
 		"ServerConnectionListenerMixin",
 		"ServerNameResolverMixin",
 		"ConnectionMixin",
-		"ConnectionMemoryMixin"
+		"ConnectionMemoryMixin",
+		"ItemEntityMixin",
+		"ServerPlayerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
