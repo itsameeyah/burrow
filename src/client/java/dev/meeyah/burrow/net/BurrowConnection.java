@@ -181,11 +181,11 @@ public final class BurrowConnection {
             case Protocol.OP_INVITE_RECEIVED -> {
                 UUID host = uuid(msg, "host");
                 if (host != null) {
-                    state.addInvite(new FriendsState.WorldInvite(
-                            host,
-                            strOr(msg, "hostName", "?"),
-                            strOr(msg, "worldName", "a world"),
-                            strOr(msg, "invitedByName", "?")));
+                    String hostName = strOr(msg, "hostName", "?");
+                    String worldName = strOr(msg, "worldName", "a world");
+                    String invitedByName = strOr(msg, "invitedByName", hostName);
+                    state.addInvite(new FriendsState.WorldInvite(host, hostName, worldName, invitedByName));
+                    dev.meeyah.burrow.ui.BurrowToasts.showWorldInvite(hostName, worldName, invitedByName);
                 }
             }
             case Protocol.OP_JOIN_READY -> JoinFlow.onJoinReady(

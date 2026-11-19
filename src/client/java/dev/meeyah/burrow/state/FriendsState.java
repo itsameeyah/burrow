@@ -77,6 +77,7 @@ public final class FriendsState {
     private volatile String selfName;
     private volatile String lastError;
     private volatile long lastErrorAt;
+    private volatile boolean initialSyncDone = false;
 
     public void addListener(Listener l) {
         listeners.add(l);
@@ -146,6 +147,21 @@ public final class FriendsState {
             List<Request> outgoing,
             List<DiscoverableWorld> newDiscoverable
     ) {
+        if (initialSyncDone) {
+            java.util.Set<UUID> prevIncoming = new java.util.HashSet<>();
+            for (Request r : requests) {
+                if (!r.outgoing() && r.uuid() != null) {
+                    prevIncoming.add(r.uuid());
+                }
+            }
+            for (Request r : incoming) {
+                if (!r.outgoing() && r.uuid() != null && !prevIncoming.contains(r.uuid())) {
+                    dev.meeyah.burrow.ui.BurrowToasts.showFriendRequest(r.name());
+                }
+            }
+        }
+        initialSyncDone = true;
+
         friends.clear();
         friends.addAll(newFriends);
         requests.clear();

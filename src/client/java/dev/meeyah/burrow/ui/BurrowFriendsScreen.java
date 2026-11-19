@@ -154,7 +154,7 @@ public class BurrowFriendsScreen extends Screen {
         if (mc.getSingleplayerServer() != null) {
             boolean hosting = HostSession.isHosting();
             layout.addChild(Button.builder(
-                            Component.literal(hosting ? "Host World (Live)..." : "Host World..."),
+                            Component.literal(hosting ? "Multiplayer Settings..." : "Host World..."),
                             b -> mc.gui.setScreen(new HostWorldScreen(this)))
                     .width(LIST_WIDTH).build());
         } else {
