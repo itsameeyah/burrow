@@ -29,7 +29,7 @@ public abstract class PauseScreenMixin {
     )
     private Component burrow$relabelHostWorldButton(Component label) {
         if (label == MULTIPLAYER_OPTIONS) {
-            return Component.literal(HostSession.isHosting() ? "Multiplayer Settings" : "Host World");
+            return Component.literal(HostSession.isHosting() ? "Host Settings" : "Host World");
         }
         return label;
     }

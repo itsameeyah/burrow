@@ -108,6 +108,32 @@ public final class HostSession {
         sendSession(connection, server, state, true, Math.max(1, server.getPlayerCount()));
     }
 
+    /**
+     * Invite a friend into the current singleplayer world. If the world is not
+     * hosted yet, automatically starts hosting first so inviting from the
+     * Friends list works in one click.
+     */
+    public static synchronized boolean inviteFriend(UUID targetUuid) {
+        if (targetUuid == null) {
+            return false;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        IntegratedServer server = mc == null ? null : mc.getSingleplayerServer();
+        BurrowConnection connection = BurrowClient.connection();
+        if (server == null || connection == null) {
+            return false;
+        }
+        if (!hosting) {
+            start();
+        }
+        if (!hosting) {
+            return false;
+        }
+        connection.sessionInvite(targetUuid, null);
+        BurrowClient.friends().dismissInviteRequest(targetUuid);
+        return true;
+    }
+
     public static synchronized void stop() {
         if (!hosting) {
             closeTunnels();

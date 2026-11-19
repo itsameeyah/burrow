@@ -27,22 +27,17 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Vanilla-styled "Host World" / "Multiplayer Settings" control panel.
- *
- * Uses Minecraft 26.2's 9-slice panel & tab sprites, labeled two-column
- * settings with a real Player Cap slider, player cards with skin heads +
- * join-source subtitles + inline expandable management drawer, and a
- * dedicated Bans tab.
+ * Vanilla-styled "Host World" / "Host Settings" control panel.
  */
 public class HostWorldScreen extends Screen {
-    private static final int PANEL_W = 356;
-    private static final int PANEL_H = 234;
-    private static final int PAD_X = 12;
-    private static final int TABS_Y_OFFSET = 40;
+    private static final int PANEL_W = 348;
+    private static final int PANEL_H = 228;
+    private static final int PAD_X = 10;
+    private static final int TABS_Y = 35;
     private static final int TAB_H = 20;
-    private static final int CONTENT_Y_OFFSET = 59;
+    private static final int CONTENT_Y = 54;
     private static final int CONTENT_H = 136;
-    private static final int FOOTER_Y_OFFSET = 203;
+    private static final int FOOTER_Y = 197;
 
     private enum Tab { SETTINGS, PLAYERS, BANS }
 
@@ -53,7 +48,6 @@ public class HostWorldScreen extends Screen {
     private int tickCounter = 0;
     private int lastSeenPlayerCount = -1;
 
-    // Cached panel geometry computed in init()
     private int panelX;
     private int panelY;
     private int contentX;
@@ -80,16 +74,16 @@ public class HostWorldScreen extends Screen {
         this.emptyMessage = null;
 
         this.panelX = (this.width - PANEL_W) / 2;
-        this.panelY = Math.max(3, (this.height - PANEL_H) / 2);
+        this.panelY = Math.max(4, (this.height - PANEL_H) / 2);
         this.contentX = this.panelX + PAD_X;
-        this.contentY = this.panelY + CONTENT_Y_OFFSET;
+        this.contentY = this.panelY + CONTENT_Y;
         this.contentW = PANEL_W - PAD_X * 2;
 
         IntegratedServer server = this.minecraft.getSingleplayerServer();
         if (server == null) {
             this.emptyMessage = "Hosting is only available inside a singleplayer world.";
             addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
-                    .bounds(this.contentX + this.contentW - 84, this.panelY + FOOTER_Y_OFFSET, 84, 20).build());
+                    .bounds(this.contentX + this.contentW - 84, this.panelY + FOOTER_Y, 84, 20).build());
             return;
         }
 
@@ -105,9 +99,9 @@ public class HostWorldScreen extends Screen {
         this.lastSeenPlayerCount = playerCount;
         Map<UUID, String> banned = state.bannedSnapshot();
 
-        // ----- Vanilla Tabs (aligned flush with contentX..contentX+contentW) -----
+        // ----- Vanilla Tabs (flush with inset box) -----
         int tabX = this.contentX;
-        int tabY = this.panelY + TABS_Y_OFFSET;
+        int tabY = this.panelY + TABS_Y;
         int tabGap = 2;
         int tabW = (this.contentW - tabGap * 2) / 3;
         int lastTabW = this.contentW - (tabW + tabGap) * 2;
@@ -134,8 +128,8 @@ public class HostWorldScreen extends Screen {
             case BANS -> initBansTab(server, banned);
         }
 
-        // ----- Footer Bar (flush with content edges) -----
-        int footerY = this.panelY + FOOTER_Y_OFFSET;
+        // ----- Footer Bar -----
+        int footerY = this.panelY + FOOTER_Y;
         Component hostBtnLabel = hosting
                 ? Component.literal("Stop Hosting").withColor(0xFFFF8A8A)
                 : Component.literal("Start Hosting").withColor(0xFF7AE89B);
@@ -146,20 +140,20 @@ public class HostWorldScreen extends Screen {
                 HostSession.start();
             }
             rebuildWidgets();
-        }).bounds(this.contentX, footerY, 122, 20).build());
+        }).bounds(this.contentX, footerY, 118, 20).build());
 
         addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
                 .bounds(this.contentX + this.contentW - 84, footerY, 84, 20).build());
     }
 
     private void initSettingsTab(HostWorldState state, boolean hosting) {
-        int labelX = this.contentX + 12;
-        int ctrlW = 156;
-        int ctrlX = this.contentX + this.contentW - ctrlW - 10;
-        int rowY = this.contentY + 10;
-        int rowStep = 24;
+        // 5 rows x 20px + 4 x 5px gaps = 120px centered inside 136px -> 8px top & bottom padding
+        int labelX = this.contentX + 10;
+        int ctrlW = 152;
+        int ctrlX = this.contentX + this.contentW - ctrlW - 8;
+        int rowY = this.contentY + 8;
+        int rowStep = 25;
 
-        // 1. Who Can Join
         this.settingLabels.add(new RowLabel("Who Can Join", labelX, rowY + 6));
         addRenderableWidget(CycleButton.<HostWorldState.AccessMode>builder(
                         m -> Component.literal(m.label()), state.access())
@@ -172,7 +166,6 @@ public class HostWorldScreen extends Screen {
                 }));
         rowY += rowStep;
 
-        // 2. Default Role
         this.settingLabels.add(new RowLabel("Default Role", labelX, rowY + 6));
         addRenderableWidget(CycleButton.<HostWorldState.Role>builder(
                         r -> Component.literal(r.label()), state.defaultRole())
@@ -184,7 +177,6 @@ public class HostWorldScreen extends Screen {
                 }));
         rowY += rowStep;
 
-        // 3. Who Can Invite
         this.settingLabels.add(new RowLabel("Who Can Invite", labelX, rowY + 6));
         addRenderableWidget(CycleButton.<HostWorldState.InvitePerm>builder(
                         p -> Component.literal(p.label()), state.invitePerm())
@@ -197,12 +189,10 @@ public class HostWorldScreen extends Screen {
                 }));
         rowY += rowStep;
 
-        // 4. Player Cap (real vanilla slider!)
         this.settingLabels.add(new RowLabel("Player Cap", labelX, rowY + 6));
         addRenderableWidget(new PlayerCapSlider(ctrlX, rowY, ctrlW, 20, state));
         rowY += rowStep;
 
-        // 5. Join Lock
         this.settingLabels.add(new RowLabel("Join Lock", labelX, rowY + 6));
         Component lockLabel = state.locked()
                 ? Component.literal("Locked").withColor(0xFFFFCC66)
@@ -234,7 +224,6 @@ public class HostWorldScreen extends Screen {
             return a.getScoreboardName().compareToIgnoreCase(b.getScoreboardName());
         });
 
-        // Clear expandedPlayer if they left the world
         if (this.expandedPlayer != null) {
             boolean stillHere = ordered.stream().anyMatch(p -> this.expandedPlayer.equals(p.getUUID()));
             if (!stillHere) {
@@ -248,12 +237,11 @@ public class HostWorldScreen extends Screen {
         this.playersSubHeader = count + " of " + state.maxPlayers() + " players in world";
 
         if (hosting) {
-            Button inviteBtn = Button.builder(Component.literal("+ Invite"), b -> {
+            addRenderableWidget(Button.builder(Component.literal("+ Invite"), b -> {
                 if (this.minecraft != null) {
                     this.minecraft.gui.setScreen(new InviteFriendScreen(this));
                 }
-            }).bounds(innerX + innerW - 66, this.contentY + 6, 66, 16).build();
-            addRenderableWidget(inviteBtn);
+            }).bounds(innerX + innerW - 64, this.contentY + 6, 64, 16).build());
         }
 
         int perPage = (this.expandedPlayer != null) ? 2 : 3;
@@ -274,23 +262,23 @@ public class HostWorldScreen extends Screen {
             String subtitle = isHost ? "World owner" : state.joinInfoOf(uuid).describe();
 
             addRenderableWidget(new PlayerCardWidget(
-                    innerX, y, innerW, 29,
+                    innerX, y, innerW, 30,
                     uuid, name, roleLabel, roleColor, subtitle, !isHost, expanded,
                     () -> {
                         this.expandedPlayer = expanded ? null : uuid;
                         rebuildWidgets();
                     }));
-            y += 29;
+            y += 30;
 
             if (expanded) {
                 addExpandedPlayerDrawer(server, state, uuid, name, innerX, y, innerW);
-                y += 26;
+                y += 25;
             }
-            y += 3;
+            y += 4;
         }
 
         if (pages > 1) {
-            addPagerControls(innerX, this.contentY + CONTENT_H - 19, innerW, pages);
+            addPagerControls(innerX, this.contentY + CONTENT_H - 20, innerW, pages);
         }
     }
 
@@ -307,7 +295,6 @@ public class HostWorldScreen extends Screen {
         int curX = x + 6;
         int gap = 4;
 
-        // Role cycle button
         HostWorldState.Role current = state.roleOf(uuid);
         CycleButton<HostWorldState.Role> roleBtn = CycleButton.<HostWorldState.Role>builder(
                         r -> Component.literal("Role: " + r.label()), current)
@@ -320,19 +307,16 @@ public class HostWorldScreen extends Screen {
         addRenderableWidget(roleBtn);
         curX += 96 + gap;
 
-        // Optional Add Friend button if they aren't a Burrow friend yet
         if (!BurrowClient.friends().isFriend(uuid) && BurrowClient.connection() != null) {
-            Button addBtn = Button.builder(Component.literal("+ Friend"), b -> {
+            addRenderableWidget(Button.builder(Component.literal("+ Friend"), b -> {
                 BurrowClient.connection().addFriend(name);
                 b.active = false;
                 b.setMessage(Component.literal("Sent"));
-            }).bounds(curX, btnY, 62, 18).build();
-            addRenderableWidget(addBtn);
+            }).bounds(curX, btnY, 60, 18).build());
         }
 
-        // Right-aligned Kick & Ban buttons
-        int banW = 44;
-        int kickW = 46;
+        int banW = 42;
+        int kickW = 44;
         int banX = x + w - banW - 6;
         int kickX = banX - kickW - gap;
 
@@ -363,7 +347,7 @@ public class HostWorldScreen extends Screen {
         int from = this.listPage * perPage;
         int to = Math.min(entries.size(), from + perPage);
 
-        int y = this.contentY + 10;
+        int y = this.contentY + 8;
         for (Map.Entry<UUID, String> e : entries.subList(from, to)) {
             this.banRows.add(new BanRowDisplay(e.getKey(), e.getValue(), innerX, y, innerW, 28));
             addRenderableWidget(Button.builder(Component.literal("Unban"), b -> {
@@ -374,7 +358,7 @@ public class HostWorldScreen extends Screen {
         }
 
         if (pages > 1) {
-            addPagerControls(innerX, this.contentY + CONTENT_H - 19, innerW, pages);
+            addPagerControls(innerX, this.contentY + CONTENT_H - 20, innerW, pages);
         }
     }
 
@@ -398,19 +382,17 @@ public class HostWorldScreen extends Screen {
     public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         super.extractBackground(g, mouseX, mouseY, partialTick);
 
-        // Outer vanilla 9-slice modal panel
         BurrowUi.drawModalPanel(g, this.panelX, this.panelY, PANEL_W, PANEL_H);
 
-        // Header text & live status badge
         Font font = this.font;
         IntegratedServer server = this.minecraft.getSingleplayerServer();
         boolean hosting = HostSession.isHosting();
-        String title = hosting ? "Multiplayer Settings" : "Host World";
+        String title = hosting ? "Host Settings" : "Host World";
         String worldName = server != null ? HostSession.safeWorldName(server) : "";
 
-        g.text(font, title, this.contentX, this.panelY + 12, BurrowUi.TEXT_PRIMARY, true);
+        g.text(font, title, this.contentX, this.panelY + 10, BurrowUi.TEXT_PRIMARY, true);
         if (!worldName.isEmpty()) {
-            g.text(font, worldName, this.contentX, this.panelY + 24, BurrowUi.TEXT_SECONDARY, false);
+            g.text(font, worldName, this.contentX, this.panelY + 21, BurrowUi.TEXT_SECONDARY, false);
         }
 
         if (server != null) {
@@ -418,39 +400,34 @@ public class HostWorldScreen extends Screen {
             int count = Math.max(1, server.getPlayerCount());
             int cap = state != null ? state.maxPlayers() : 8;
             if (hosting && state != null && state.locked()) {
-                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + 13,
+                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + 11,
                         BurrowUi.DOT_LOCKED, "LOCKED · " + count + "/" + cap);
             } else if (hosting) {
-                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + 13,
+                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + 11,
                         BurrowUi.DOT_LIVE, "LIVE · " + count + "/" + cap);
             } else {
-                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + 13,
+                BurrowUi.drawStatusPill(g, font, this.contentX + this.contentW, this.panelY + 11,
                         BurrowUi.DOT_OFFLINE, "OFFLINE");
             }
         }
 
-        // Recessed dark content panel
         BurrowUi.drawInsetBox(g, this.contentX, this.contentY, this.contentW, CONTENT_H);
 
-        // Settings labels
         for (RowLabel lbl : this.settingLabels) {
             g.text(font, lbl.text(), lbl.x(), lbl.y(), BurrowUi.TEXT_PRIMARY, false);
         }
 
-        // Players tab micro-header + expanded drawer backdrop
         if (this.playersSubHeader != null) {
-            g.text(font, this.playersSubHeader, this.contentX + 10, this.contentY + 10, BurrowUi.TEXT_SECONDARY, false);
+            g.text(font, this.playersSubHeader, this.contentX + 8, this.contentY + 10, BurrowUi.TEXT_SECONDARY, false);
         }
 
-        // Bans cards
         for (BanRowDisplay row : this.banRows) {
             g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), BurrowUi.CARD_BG);
-            g.outline(row.x(), row.y(), row.w(), row.h(), 0x22FFFFFF);
+            g.outline(row.x(), row.y(), row.w(), row.h(), BurrowUi.CARD_BORDER);
             PlayerHeads.draw(g, row.uuid(), row.name(), row.x() + 5, row.y() + 4, 20);
             g.text(font, row.name(), row.x() + 31, row.y() + 10, BurrowUi.TEXT_PRIMARY, true);
         }
 
-        // Centered empty state text
         if (this.emptyMessage != null) {
             g.centeredText(font, this.emptyMessage,
                     this.contentX + this.contentW / 2,
@@ -545,7 +522,7 @@ public class HostWorldScreen extends Screen {
         }
     }
 
-    /** Custom sleek dark card for a connected player (head, name, role pill, join source). */
+    /** Sleek dark card for a connected player (head, name, crisp scaled role pill, join source). */
     private static final class PlayerCardWidget extends AbstractWidget {
         private final UUID uuid;
         private final String name;
@@ -583,27 +560,26 @@ public class HostWorldScreen extends Screen {
                     ? BurrowUi.CARD_SELECTED
                     : (this.interactive && this.isHovered ? BurrowUi.CARD_HOVER : BurrowUi.CARD_BG);
             g.fill(x, y, x + w, y + h, bg);
-            g.outline(x, y, w, h, this.expanded ? 0x66FFFFFF : 0x22FFFFFF);
+            g.outline(x, y, w, h, this.expanded ? BurrowUi.CARD_BORDER_ACTIVE : BurrowUi.CARD_BORDER);
 
-            // If expanded, paint the connected drawer panel right underneath this card
             if (this.expanded) {
-                g.fill(x, y + h, x + w, y + h + 25, BurrowUi.DRAWER_BG);
-                g.outline(x, y + h - 1, w, 26, 0x33FFFFFF);
+                g.fill(x, y + h, x + w, y + h + 24, BurrowUi.DRAWER_BG);
+                g.outline(x, y + h - 1, w, 25, BurrowUi.CARD_BORDER_ACTIVE);
             }
 
-            PlayerHeads.draw(g, this.uuid, this.name, x + 5, y + 4, 20);
+            PlayerHeads.draw(g, this.uuid, this.name, x + 5, y + 5, 20);
 
             Font font = Minecraft.getInstance().font;
             int textX = x + 31;
             g.text(font, this.name, textX, y + 5, BurrowUi.TEXT_PRIMARY, true);
             int nameW = font.width(this.name);
-            BurrowUi.drawTagPill(g, font, textX + nameW + 6, y + 3, this.roleLabel, this.roleColor);
-            g.text(font, this.subtitle, textX, y + 16, BurrowUi.TEXT_SECONDARY, false);
+            BurrowUi.drawTagPill(g, font, textX + nameW + 5, y + 4, this.roleLabel, this.roleColor);
+            g.text(font, this.subtitle, textX, y + 17, BurrowUi.TEXT_SECONDARY, false);
 
             if (this.interactive) {
                 String chevron = this.expanded ? "v" : ">";
                 int chevColor = this.isHovered || this.expanded ? BurrowUi.TEXT_PRIMARY : BurrowUi.TEXT_MUTED;
-                g.text(font, chevron, x + w - 12, y + 10, chevColor, false);
+                g.text(font, chevron, x + w - 12, y + 11, chevColor, false);
             }
         }
 
@@ -621,7 +597,7 @@ public class HostWorldScreen extends Screen {
         }
     }
 
-    /** Sleek vanilla-styled modal to invite an online friend into the current world. */
+    /** Sleek vanilla-styled modal to invite an online friend into the current hosted world. */
     private static class InviteFriendScreen extends Screen {
         private static final int MODAL_W = 280;
         private static final int MODAL_H = 196;
@@ -645,14 +621,14 @@ public class HostWorldScreen extends Screen {
 
             List<FriendsState.Friend> online = new ArrayList<>();
             for (FriendsState.Friend f : BurrowClient.friends().friends()) {
-                if ("online".equalsIgnoreCase(f.presence())) {
+                if (f.isOnline()) {
                     online.add(f);
                 }
             }
 
-            int innerX = this.modalX + 18;
-            int innerW = MODAL_W - 36;
-            int y = this.modalY + 38;
+            int innerX = this.modalX + 16;
+            int innerW = MODAL_W - 32;
+            int y = this.modalY + 36;
 
             if (online.isEmpty()) {
                 this.emptyMsg = "No friends online right now.";
@@ -660,9 +636,7 @@ public class HostWorldScreen extends Screen {
                 for (FriendsState.Friend f : online.subList(0, Math.min(online.size(), 4))) {
                     this.rows.add(new BanRowDisplay(f.uuid(), f.name(), innerX, y, innerW, 28));
                     addRenderableWidget(Button.builder(Component.literal("Invite"), b -> {
-                        if (BurrowClient.connection() != null) {
-                            BurrowClient.connection().sessionInvite(f.uuid(), null);
-                        }
+                        HostSession.inviteFriend(f.uuid());
                         b.active = false;
                         b.setMessage(Component.literal("Invited"));
                     }).bounds(innerX + innerW - 60, y + 5, 54, 18).build());
@@ -671,25 +645,25 @@ public class HostWorldScreen extends Screen {
             }
 
             addRenderableWidget(Button.builder(Component.literal("Back"), b -> onClose())
-                    .bounds(this.modalX + MODAL_W - 88, this.modalY + MODAL_H - 30, 76, 20).build());
+                    .bounds(this.modalX + MODAL_W - 86, this.modalY + MODAL_H - 30, 76, 20).build());
         }
 
         @Override
         public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
             super.extractBackground(g, mouseX, mouseY, partialTick);
             BurrowUi.drawModalPanel(g, this.modalX, this.modalY, MODAL_W, MODAL_H);
-            g.text(this.font, "Invite Friend to World", this.modalX + 12, this.modalY + 12, BurrowUi.TEXT_PRIMARY, true);
-            BurrowUi.drawInsetBox(g, this.modalX + 12, this.modalY + 30, MODAL_W - 24, MODAL_H - 66);
+            g.text(this.font, "Invite Friend to World", this.modalX + 10, this.modalY + 11, BurrowUi.TEXT_PRIMARY, true);
+            BurrowUi.drawInsetBox(g, this.modalX + 10, this.modalY + 28, MODAL_W - 20, MODAL_H - 64);
 
             for (BanRowDisplay row : this.rows) {
                 g.fill(row.x(), row.y(), row.x() + row.w(), row.y() + row.h(), BurrowUi.CARD_BG);
-                g.outline(row.x(), row.y(), row.w(), row.h(), 0x22FFFFFF);
+                g.outline(row.x(), row.y(), row.w(), row.h(), BurrowUi.CARD_BORDER);
                 PlayerHeads.draw(g, row.uuid(), row.name(), row.x() + 5, row.y() + 4, 20);
                 g.text(this.font, row.name(), row.x() + 31, row.y() + 10, BurrowUi.TEXT_PRIMARY, true);
             }
             if (this.emptyMsg != null) {
                 g.centeredText(this.font, this.emptyMsg,
-                        this.modalX + MODAL_W / 2, this.modalY + MODAL_H / 2 - 6, BurrowUi.TEXT_MUTED);
+                        this.modalX + MODAL_W / 2, this.modalY + MODAL_H / 2 - 4, BurrowUi.TEXT_MUTED);
             }
         }
 

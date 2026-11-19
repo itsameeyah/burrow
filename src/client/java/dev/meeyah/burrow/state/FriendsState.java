@@ -38,6 +38,17 @@ public final class FriendsState {
             return isOnline() && "server".equals(activity) && serverIp != null && !serverIp.isBlank();
         }
 
+        /** True when this friend is actually inside a world or server (not idle on the title screen). */
+        public boolean isInGame() {
+            if (!isOnline()) return false;
+            if (hosting) return true;
+            return "singleplayer".equals(activity)
+                    || "server".equals(activity)
+                    || "local".equals(activity)
+                    || "multiplayer".equals(activity)
+                    || "burrow".equals(activity);
+        }
+
         public String activitySubtitle() {
             if (!isOnline()) {
                 return "Offline";
@@ -160,6 +171,22 @@ public final class FriendsState {
 
     public List<WorldInvite> worldInvites() {
         return List.copyOf(invites);
+    }
+
+    public @org.jetbrains.annotations.Nullable WorldInvite worldInviteFrom(UUID hostUuid) {
+        if (hostUuid == null) return null;
+        for (WorldInvite inv : invites) {
+            if (hostUuid.equals(inv.host())) return inv;
+        }
+        return null;
+    }
+
+    public boolean hasInviteRequestFrom(UUID fromUuid) {
+        if (fromUuid == null) return false;
+        for (InviteRequest req : inviteRequests) {
+            if (fromUuid.equals(req.from())) return true;
+        }
+        return false;
     }
 
     public boolean isFriend(UUID uuid) {
