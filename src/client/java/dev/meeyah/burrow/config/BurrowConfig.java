@@ -25,6 +25,9 @@ public class BurrowConfig {
     /** Connect to the signaling server automatically when the game starts. */
     public boolean connectAutomatically = true;
 
+    /** Hide world/server details from friends and show only "Playing Multiplayer". */
+    public boolean incognito = false;
+
     public static BurrowConfig load() {
         BurrowConfig cfg = null;
         if (Files.exists(PATH)) {

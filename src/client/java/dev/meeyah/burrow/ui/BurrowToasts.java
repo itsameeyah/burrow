@@ -46,4 +46,18 @@ public final class BurrowToasts {
                 title,
                 body));
     }
+
+    public static void showInviteRequest(String fromName) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.gui == null || fromName == null || fromName.isBlank()) {
+            return;
+        }
+        Component title = Component.literal("Invite Request");
+        Component body = Component.literal(fromName + " wants to join you · Press O");
+        mc.execute(() -> SystemToast.add(
+                mc.gui.toastManager(),
+                new SystemToast.SystemToastId(INVITE_DISPLAY_MS),
+                title,
+                body));
+    }
 }

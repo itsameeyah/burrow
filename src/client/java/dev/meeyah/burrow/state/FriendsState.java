@@ -1,15 +1,18 @@
 package dev.meeyah.burrow.state;
 
+import dev.meeyah.burrow.ui.BurrowToasts;
 import net.minecraft.client.Minecraft;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Client-side model of the friends list, incoming/outgoing requests,
- * discoverable non-friend worlds (friends-of-friends / open), and world invites.
- * The connection layer mutates it; screens observe it through {@link Listener}.
+ * Client-side model of friends (including rich server/world presence),
+ * incoming/outgoing friend requests, discoverable non-friend worlds
+ * (friends-of-friends / open), world invites, and incoming invite requests.
  */
 public final class FriendsState {
     public record Friend(
@@ -21,14 +24,56 @@ public final class FriendsState {
             String access,
             boolean locked,
             int playerCount,
-            int maxPlayers
+            int maxPlayers,
+            String activity,
+            String serverName,
+            String serverIp,
+            String activityLabel
     ) {
-        public Friend(UUID uuid, String name, String presence, boolean hosting, String worldName) {
-            this(uuid, name, presence, hosting, worldName, "", false, 0, 0);
+        public boolean isOnline() {
+            return "online".equalsIgnoreCase(presence);
+        }
+
+        public boolean hasJoinableServer() {
+            return isOnline() && "server".equals(activity) && serverIp != null && !serverIp.isBlank();
+        }
+
+        public String activitySubtitle() {
+            if (!isOnline()) {
+                return "Offline";
+            }
+            if (hosting) {
+                String world = (worldName == null || worldName.isBlank()) ? "a world" : worldName;
+                String count = maxPlayers > 0 ? " (" + playerCount + "/" + maxPlayers + ")" : "";
+                return "Hosting " + world + count + (locked ? " · Locked" : "");
+            }
+            if ("server".equals(activity) && serverIp != null && !serverIp.isBlank()) {
+                if (serverName != null && !serverName.isBlank() && !serverName.equalsIgnoreCase(serverIp)) {
+                    return "Playing on " + serverName + " (" + serverIp + ")";
+                }
+                return "Playing on (" + serverIp + ")";
+            }
+            if ("local".equals(activity)) {
+                return "Playing on local server";
+            }
+            if ("burrow".equals(activity)) {
+                return (activityLabel != null && !activityLabel.isBlank())
+                        ? "Playing in " + activityLabel
+                        : "Playing in a friend's world";
+            }
+            if ("multiplayer".equals(activity)) {
+                return "Playing Multiplayer";
+            }
+            if ("singleplayer".equals(activity)) {
+                return "Playing Singleplayer";
+            }
+            return "Online";
         }
     }
 
     public record Request(UUID uuid, String name, boolean outgoing) {}
+
+    public record InviteRequest(UUID from, String fromName) {}
 
     public record DiscoverableWorld(
             UUID host,
@@ -49,7 +94,16 @@ public final class FriendsState {
             String invitedByName
     ) {}
 
-    public record PresenceUpdate(UUID uuid, String presence, boolean hosting, String worldName) {}
+    public record PresenceUpdate(
+            UUID uuid,
+            String presence,
+            boolean hosting,
+            String worldName,
+            String activity,
+            String serverName,
+            String serverIp,
+            String activityLabel
+    ) {}
 
     public record SessionUpdate(
             UUID host,
@@ -70,6 +124,7 @@ public final class FriendsState {
 
     private final List<Friend> friends = new CopyOnWriteArrayList<>();
     private final List<Request> requests = new CopyOnWriteArrayList<>();
+    private final List<InviteRequest> inviteRequests = new CopyOnWriteArrayList<>();
     private final List<DiscoverableWorld> discoverable = new CopyOnWriteArrayList<>();
     private final List<WorldInvite> invites = new CopyOnWriteArrayList<>();
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
@@ -93,6 +148,10 @@ public final class FriendsState {
 
     public List<Request> requests() {
         return List.copyOf(requests);
+    }
+
+    public List<InviteRequest> inviteRequests() {
+        return List.copyOf(inviteRequests);
     }
 
     public List<DiscoverableWorld> discoverableWorlds() {
@@ -148,7 +207,7 @@ public final class FriendsState {
             List<DiscoverableWorld> newDiscoverable
     ) {
         if (initialSyncDone) {
-            java.util.Set<UUID> prevIncoming = new java.util.HashSet<>();
+            Set<UUID> prevIncoming = new HashSet<>();
             for (Request r : requests) {
                 if (!r.outgoing() && r.uuid() != null) {
                     prevIncoming.add(r.uuid());
@@ -156,7 +215,7 @@ public final class FriendsState {
             }
             for (Request r : incoming) {
                 if (!r.outgoing() && r.uuid() != null && !prevIncoming.contains(r.uuid())) {
-                    dev.meeyah.burrow.ui.BurrowToasts.showFriendRequest(r.name());
+                    BurrowToasts.showFriendRequest(r.name());
                 }
             }
         }
@@ -186,6 +245,20 @@ public final class FriendsState {
         }
     }
 
+    public void addInviteRequest(InviteRequest req) {
+        if (req.from() == null) return;
+        inviteRequests.removeIf(existing -> req.from().equals(existing.from()));
+        inviteRequests.add(req);
+        fireChanged();
+    }
+
+    public void dismissInviteRequest(UUID from) {
+        if (from == null) return;
+        if (inviteRequests.removeIf(existing -> from.equals(existing.from()))) {
+            fireChanged();
+        }
+    }
+
     public void applyPresence(List<PresenceUpdate> updates) {
         boolean changed = false;
         for (PresenceUpdate u : updates) {
@@ -202,7 +275,11 @@ public final class FriendsState {
                             u.hosting() ? f.access() : "",
                             u.hosting() && f.locked(),
                             u.hosting() ? f.playerCount() : 0,
-                            u.hosting() ? f.maxPlayers() : 0));
+                            u.hosting() ? f.maxPlayers() : 0,
+                            u.activity() != null ? u.activity() : f.activity(),
+                            u.serverName() != null ? u.serverName() : f.serverName(),
+                            u.serverIp() != null ? u.serverIp() : f.serverIp(),
+                            u.activityLabel() != null ? u.activityLabel() : f.activityLabel()));
                     changed = true;
                     break;
                 }
@@ -230,7 +307,11 @@ public final class FriendsState {
                             u.active() && u.access() != null ? u.access() : "",
                             u.active() && u.locked(),
                             u.active() ? u.playerCount() : 0,
-                            u.active() ? u.maxPlayers() : 0));
+                            u.active() ? u.maxPlayers() : 0,
+                            f.activity(),
+                            f.serverName(),
+                            f.serverIp(),
+                            f.activityLabel()));
                     matchedFriend = true;
                     changed = true;
                     break;

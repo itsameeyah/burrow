@@ -26,6 +26,8 @@ public final class Protocol {
     public static final String OP_SESSION_UPDATE = "session.update";
     public static final String OP_SESSION_CLOSE = "session.close";
     public static final String OP_SESSION_INVITE = "session.invite";
+    public static final String OP_PRESENCE_UPDATE = "presence.update";
+    public static final String OP_INVITE_REQUEST = "invite.request";
     public static final String OP_JOIN_BEGIN = "join.begin";
 
     // Server -> client
@@ -34,6 +36,7 @@ public final class Protocol {
     public static final String OP_PRESENCE_BATCH = "presence.batch";
     public static final String OP_SESSION_STATE = "session.state";
     public static final String OP_INVITE_RECEIVED = "invite.received";
+    public static final String OP_INVITE_REQUESTED = "invite.requested";
     public static final String OP_JOIN_READY = "join.ready";
     public static final String OP_RELAY_HOST = "relay.host";
     public static final String OP_ERROR = "error";
@@ -113,6 +116,21 @@ public final class Protocol {
         if (hostId != null) {
             o.addProperty("host", hostId.toString());
         }
+        return o;
+    }
+
+    public static JsonObject presenceUpdate(String activity, String serverName, String serverIp, String label) {
+        JsonObject o = msg(OP_PRESENCE_UPDATE);
+        o.addProperty("activity", activity == null ? "idle" : activity);
+        o.addProperty("serverName", serverName == null ? "" : serverName);
+        o.addProperty("serverIp", serverIp == null ? "" : serverIp);
+        o.addProperty("label", label == null ? "" : label);
+        return o;
+    }
+
+    public static JsonObject inviteRequest(UUID friendId) {
+        JsonObject o = msg(OP_INVITE_REQUEST);
+        o.addProperty("uuid", friendId.toString());
         return o;
     }
 

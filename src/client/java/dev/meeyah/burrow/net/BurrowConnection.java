@@ -9,7 +9,9 @@ import dev.meeyah.burrow.config.BurrowConfig;
 import dev.meeyah.burrow.dev.DevIdentity;
 import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.session.JoinFlow;
+import dev.meeyah.burrow.state.ActivityTracker;
 import dev.meeyah.burrow.state.FriendsState;
+import dev.meeyah.burrow.ui.BurrowToasts;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.slf4j.Logger;
@@ -168,6 +170,7 @@ public final class BurrowConnection {
                 // If we were hosting before a reconnect, re-announce the
                 // session so friends still see the world as live.
                 HostSession.reannounce();
+                ActivityTracker.pushCurrent();
             }
             case Protocol.OP_FRIENDS_SYNC -> {
                 List<FriendsState.Friend> friends = parseFriends(array(msg, "friends"));
@@ -185,7 +188,15 @@ public final class BurrowConnection {
                     String worldName = strOr(msg, "worldName", "a world");
                     String invitedByName = strOr(msg, "invitedByName", hostName);
                     state.addInvite(new FriendsState.WorldInvite(host, hostName, worldName, invitedByName));
-                    dev.meeyah.burrow.ui.BurrowToasts.showWorldInvite(hostName, worldName, invitedByName);
+                    BurrowToasts.showWorldInvite(hostName, worldName, invitedByName);
+                }
+            }
+            case Protocol.OP_INVITE_REQUESTED -> {
+                UUID from = uuid(msg, "from");
+                if (from != null) {
+                    String fromName = strOr(msg, "fromName", "?");
+                    state.addInviteRequest(new FriendsState.InviteRequest(from, fromName));
+                    BurrowToasts.showInviteRequest(fromName);
                 }
             }
             case Protocol.OP_JOIN_READY -> JoinFlow.onJoinReady(
@@ -241,7 +252,11 @@ public final class BurrowConnection {
                     strOr(o, "access", ""),
                     bool(o, "locked"),
                     intVal(o, "playerCount"),
-                    intVal(o, "maxPlayers")));
+                    intVal(o, "maxPlayers"),
+                    strOr(o, "activity", ""),
+                    strOr(o, "serverName", ""),
+                    strOr(o, "serverIp", ""),
+                    strOr(o, "activityLabel", "")));
         }
         return out;
     }
@@ -286,7 +301,11 @@ public final class BurrowConnection {
                     uuid(o, "uuid"),
                     strOr(o, "presence", "offline"),
                     bool(o, "hosting"),
-                    str(o, "worldName")));
+                    str(o, "worldName"),
+                    str(o, "activity"),
+                    str(o, "serverName"),
+                    str(o, "serverIp"),
+                    str(o, "activityLabel")));
         }
         return out;
     }
@@ -407,6 +426,14 @@ public final class BurrowConnection {
 
     public void sessionInvite(UUID targetId, @org.jetbrains.annotations.Nullable UUID hostId) {
         send(Protocol.sessionInvite(targetId, hostId));
+    }
+
+    public void updatePresence(String activity, String serverName, String serverIp, String label) {
+        send(Protocol.presenceUpdate(activity, serverName, serverIp, label));
+    }
+
+    public void requestInvite(UUID friendId) {
+        send(Protocol.inviteRequest(friendId));
     }
 
     public void sessionClose() {

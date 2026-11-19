@@ -57,6 +57,27 @@ public final class JoinFlow {
         }
     }
 
+    /** Join a friend's public saved Minecraft server directly (bypassing Burrow relay). */
+    public static void joinExternalServer(String serverName, String serverIp) {
+        if (serverIp == null || serverIp.isBlank()) {
+            return;
+        }
+        // Clear any unconsumed Burrow join so ConnectionMixin never intercepts this connect.
+        ActiveJoin prev = active;
+        active = null;
+        if (prev != null && !prev.consumed.get()) {
+            prev.tunnel.close();
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) return;
+        mc.execute(() -> {
+            ServerAddress address = ServerAddress.parseString(serverIp);
+            String label = (serverName == null || serverName.isBlank()) ? serverIp : serverName;
+            ServerData data = new ServerData(label, serverIp, ServerData.Type.OTHER);
+            ConnectScreen.startConnecting(mc.gui.screen(), mc, address, data, false, null);
+        });
+    }
+
     public static void onJoinReady(UUID hostUuid, String worldName, String roomId, String token, String relayPath) {
         String hostName = lookupName(hostUuid);
         String url = HostSession.relayUrl(relayPath, roomId, token);
