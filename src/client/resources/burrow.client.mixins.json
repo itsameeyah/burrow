@@ -14,7 +14,16 @@
 		"ConnectionMixin",
 		"ConnectionMemoryMixin",
 		"ItemEntityMixin",
-		"ServerPlayerMixin"
+		"ServerPlayerMixin",
+		"RegistrySyncManagerMixin",
+		"ClientRegistrySyncHandlerMixin",
+		"DisconnectedScreenMixin",
+		"ServerCommonPacketListenerMixin",
+		"DisplayAccessor",
+		"ItemDisplayAccessor",
+		"EntityAccessor",
+		"SectionBlocksUpdatePacketAccessor",
+		"EntityEventPacketAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

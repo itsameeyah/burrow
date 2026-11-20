@@ -1,8 +1,10 @@
 package dev.meeyah.burrow.session;
 
 import dev.meeyah.burrow.BurrowClient;
+import dev.meeyah.burrow.compat.ModCompat;
 import dev.meeyah.burrow.net.BurrowConnection;
 import dev.meeyah.burrow.net.RelayTunnel;
+import dev.meeyah.burrow.net.VoiceBridge;
 import dev.meeyah.burrow.state.ActivityTracker;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -193,6 +195,7 @@ public final class HostSession {
     /** Called on ServerLifecycleEvents.SERVER_STOPPING so stale state never leaks across worlds. */
     public static synchronized void onServerStopping() {
         ensureStopped();
+        ModCompat.clearAllSessions();
         capturedInitializer = null;
         stateServer = null;
         currentState = null;
@@ -271,6 +274,7 @@ public final class HostSession {
         if (tunnel != null) {
             tunnel.close();
         }
+        VoiceBridge.closeHostTunnelForPlayer(uuid);
     }
 
     private static void sendSession(
@@ -304,6 +308,7 @@ public final class HostSession {
         }
         TUNNELS.clear();
         TUNNELS_BY_PLAYER.clear();
+        VoiceBridge.closeAllHostTunnels();
     }
 
     private static void closeLocalServer() {
@@ -315,7 +320,7 @@ public final class HostSession {
         }
     }
 
-    static String relayUrl(String relayPath, String roomId, String token) {
+    public static String relayUrl(String relayPath, String roomId, String token) {
         return BurrowClient.relayBase() + relayPath + "?room=" + roomId + "&token=" + token;
     }
 

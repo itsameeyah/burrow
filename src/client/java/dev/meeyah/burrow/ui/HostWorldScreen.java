@@ -147,53 +147,70 @@ public class HostWorldScreen extends Screen {
     }
 
     private void initSettingsTab(HostWorldState state, boolean hosting) {
-        // 5 rows x 20px + 4 x 5px gaps = 120px centered inside 136px -> 8px top & bottom padding
+        // 6 rows x 18px + 5 x 3px gaps = 123px centered inside 136px -> 6px top & 7px bottom padding
         int labelX = this.contentX + 10;
         int ctrlW = 152;
         int ctrlX = this.contentX + this.contentW - ctrlW - 8;
-        int rowY = this.contentY + 8;
-        int rowStep = 25;
+        int rowY = this.contentY + 6;
+        int rowStep = 21;
+        int btnH = 18;
 
-        this.settingLabels.add(new RowLabel("Who Can Join", labelX, rowY + 6));
+        this.settingLabels.add(new RowLabel("Who Can Join", labelX, rowY + 5));
         addRenderableWidget(CycleButton.<HostWorldState.AccessMode>builder(
                         m -> Component.literal(m.label()), state.access())
                 .withValues(HostWorldState.AccessMode.values())
                 .displayOnlyValue()
                 .withTooltip(m -> Tooltip.create(Component.literal(accessTooltip(m))))
-                .create(ctrlX, rowY, ctrlW, 20, Component.literal("Who Can Join"), (btn, val) -> {
+                .create(ctrlX, rowY, ctrlW, btnH, Component.literal("Who Can Join"), (btn, val) -> {
                     state.setAccess(val);
                     HostSession.syncState();
                 }));
         rowY += rowStep;
 
-        this.settingLabels.add(new RowLabel("Default Role", labelX, rowY + 6));
+        this.settingLabels.add(new RowLabel("Default Role", labelX, rowY + 5));
         addRenderableWidget(CycleButton.<HostWorldState.Role>builder(
                         r -> Component.literal(r.label()), state.defaultRole())
                 .withValues(HostWorldState.Role.values())
                 .displayOnlyValue()
                 .withTooltip(r -> Tooltip.create(Component.literal(roleTooltip(r))))
-                .create(ctrlX, rowY, ctrlW, 20, Component.literal("Default Role"), (btn, val) -> {
+                .create(ctrlX, rowY, ctrlW, btnH, Component.literal("Default Role"), (btn, val) -> {
                     state.setDefaultRole(val);
                 }));
         rowY += rowStep;
 
-        this.settingLabels.add(new RowLabel("Who Can Invite", labelX, rowY + 6));
+        this.settingLabels.add(new RowLabel("Who Can Invite", labelX, rowY + 5));
         addRenderableWidget(CycleButton.<HostWorldState.InvitePerm>builder(
                         p -> Component.literal(p.label()), state.invitePerm())
                 .withValues(HostWorldState.InvitePerm.values())
                 .displayOnlyValue()
                 .withTooltip(p -> Tooltip.create(Component.literal("Controls who can send world invites.")))
-                .create(ctrlX, rowY, ctrlW, 20, Component.literal("Who Can Invite"), (btn, val) -> {
+                .create(ctrlX, rowY, ctrlW, btnH, Component.literal("Who Can Invite"), (btn, val) -> {
                     state.setInvitePerm(val);
                     HostSession.syncState();
                 }));
         rowY += rowStep;
 
-        this.settingLabels.add(new RowLabel("Player Cap", labelX, rowY + 6));
-        addRenderableWidget(new PlayerCapSlider(ctrlX, rowY, ctrlW, 20, state));
+        this.settingLabels.add(new RowLabel("Player Cap", labelX, rowY + 5));
+        addRenderableWidget(new PlayerCapSlider(ctrlX, rowY, ctrlW, btnH, state));
         rowY += rowStep;
 
-        this.settingLabels.add(new RowLabel("Join Lock", labelX, rowY + 6));
+        this.settingLabels.add(new RowLabel("Mismatched Mods", labelX, rowY + 5));
+        boolean allowMismatch = state.allowMismatchedMods();
+        Component mismatchLabel = allowMismatch
+                ? Component.literal("Allowed").withColor(0xFF7AE89B)
+                : Component.literal("Strict").withColor(0xFFFFCC66);
+        Button mismatchBtn = Button.builder(mismatchLabel, b -> {
+            state.setAllowMismatchedMods(!state.allowMismatchedMods());
+            rebuildWidgets();
+        }).bounds(ctrlX, rowY, ctrlW, btnH).build();
+        mismatchBtn.setTooltip(Tooltip.create(Component.literal(
+                allowMismatch
+                        ? "Friends can join without matching client-side mods. Switch to Strict if this world uses content mods."
+                        : "Enforces matching Fabric mod registries. Friends can still click 'Join Anyway' on mismatch.")));
+        addRenderableWidget(mismatchBtn);
+        rowY += rowStep;
+
+        this.settingLabels.add(new RowLabel("Join Lock", labelX, rowY + 5));
         Component lockLabel = state.locked()
                 ? Component.literal("Locked").withColor(0xFFFFCC66)
                 : Component.literal("Unlocked");
@@ -201,7 +218,7 @@ public class HostWorldScreen extends Screen {
             state.setLocked(!state.locked());
             HostSession.syncState();
             rebuildWidgets();
-        }).bounds(ctrlX, rowY, ctrlW, 20).build();
+        }).bounds(ctrlX, rowY, ctrlW, btnH).build();
         lockBtn.active = hosting;
         lockBtn.setTooltip(Tooltip.create(Component.literal(
                 hosting
