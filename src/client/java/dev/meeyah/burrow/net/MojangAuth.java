@@ -62,6 +62,9 @@ public final class MojangAuth {
         return (token == null || token.isBlank()) ? null : token;
     }
 
+    /** Structured failure result so callers know whether to retry and back off. */
+    public record AuthFailure(String message, boolean retryable, boolean rateLimited) {}
+
     /**
      * Asynchronously calls Mojang's sessionserver {@code joinServer} endpoint
      * on a dedicated daemon thread so the WebSocket and render threads never block.
@@ -69,17 +72,17 @@ public final class MojangAuth {
     public static void joinServerAsync(
             String serverId,
             Runnable onSuccess,
-            Consumer<String> onFailure
+            Consumer<AuthFailure> onFailure
     ) {
         Thread worker = new Thread(() -> {
             if (serverId == null || serverId.isBlank()) {
-                fail(onFailure, "Server sent an empty authentication challenge.");
+                fail(onFailure, "Server sent an empty authentication challenge.", true, false);
                 return;
             }
 
             Minecraft mc = safeMinecraft();
             if (mc == null) {
-                fail(onFailure, "Minecraft client is not ready to authenticate.");
+                fail(onFailure, "Minecraft client is not ready — retrying...", true, false);
                 return;
             }
 
@@ -87,14 +90,14 @@ public final class MojangAuth {
             UUID profileId = user != null ? user.getProfileId() : null;
             String token = user != null ? user.getAccessToken() : null;
             if (profileId == null || token == null || token.isBlank()) {
-                fail(onFailure, "No active Minecraft session; sign in through the launcher and restart.");
+                fail(onFailure, "No active Minecraft session; sign in through the launcher.", false, false);
                 return;
             }
 
             Services services = mc.services();
             SessionService sessionService = services != null ? services.sessionService() : null;
             if (sessionService == null) {
-                fail(onFailure, "Minecraft session service is unavailable.");
+                fail(onFailure, "Minecraft session service unavailable — retrying...", true, false);
                 return;
             }
 
@@ -105,29 +108,46 @@ public final class MojangAuth {
                 }
             } catch (AuthenticationUnavailableException e) {
                 LOG.warn("Mojang session servers unreachable during Burrow auth", e);
-                fail(onFailure, "Mojang authentication servers are unreachable. Try again shortly.");
+                fail(onFailure, "Mojang auth servers unreachable — retrying...", true, false);
             } catch (InvalidCredentialsException e) {
                 LOG.warn("Invalid Minecraft session during Burrow auth", e);
-                fail(onFailure, "Invalid Minecraft session. Restart your launcher and try again.");
+                fail(onFailure, "Invalid Minecraft session — restart launcher.", false, false);
             } catch (InsufficientPrivilegesException e) {
                 LOG.warn("Multiplayer privileges missing for Mojang auth", e);
-                fail(onFailure, "Multiplayer is disabled on this Microsoft account.");
+                fail(onFailure, "Multiplayer is disabled on this Microsoft account.", false, false);
             } catch (UserBannedException | ForcedUsernameChangeException e) {
                 LOG.warn("Account restricted during Mojang auth", e);
-                fail(onFailure, "This Minecraft account cannot authenticate with Mojang.");
+                fail(onFailure, "This Minecraft account cannot authenticate with Mojang.", false, false);
             } catch (AuthenticationException e) {
                 LOG.warn("Mojang authentication error during Burrow auth", e);
-                String detail = e.getMessage();
-                fail(onFailure, (detail != null && !detail.isBlank())
-                        ? "Mojang authentication failed: " + detail
-                        : "Mojang authentication failed.");
+                if (isRateLimit(e)) {
+                    fail(onFailure, "Mojang rate-limited (429) — retrying shortly...", true, true);
+                } else {
+                    String detail = e.getMessage();
+                    String msg = (detail != null && !detail.isBlank())
+                            ? "Mojang auth failed (" + detail + ") — retrying..."
+                            : "Mojang auth failed — retrying...";
+                    fail(onFailure, msg, true, false);
+                }
             } catch (Exception e) {
                 LOG.warn("Unexpected error during Mojang auth", e);
-                fail(onFailure, "Unexpected error during Mojang authentication.");
+                fail(onFailure, "Mojang auth error — retrying...", true, isRateLimit(e));
             }
         }, "burrow-mojang-auth");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    private static boolean isRateLimit(Throwable t) {
+        Throwable cur = t;
+        for (int depth = 0; cur != null && depth < 6; depth++) {
+            String msg = cur.getMessage();
+            if (msg != null && (msg.contains("429") || msg.toLowerCase().contains("too many requests"))) {
+                return true;
+            }
+            cur = cur.getCause();
+        }
+        return false;
     }
 
     private static @Nullable Minecraft safeMinecraft() {
@@ -143,9 +163,9 @@ public final class MojangAuth {
         return mc != null ? mc.getUser() : null;
     }
 
-    private static void fail(@Nullable Consumer<String> onFailure, String message) {
+    private static void fail(@Nullable Consumer<AuthFailure> onFailure, String message, boolean retryable, boolean rateLimited) {
         if (onFailure != null) {
-            onFailure.accept(message);
+            onFailure.accept(new AuthFailure(message, retryable, rateLimited));
         }
     }
 }

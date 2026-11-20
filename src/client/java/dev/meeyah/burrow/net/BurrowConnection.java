@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit;
  */
 public final class BurrowConnection {
     private static final Logger LOG = LoggerFactory.getLogger("Burrow");
+    private static final long HANDSHAKE_TIMEOUT_MS = 25_000L;
 
     public enum Status { OFFLINE, CONNECTING, CONNECTED, ERROR }
 
@@ -36,6 +37,7 @@ public final class BurrowConnection {
     private final FriendsState state;
     private final java.util.concurrent.atomic.AtomicBoolean reconnectScheduled =
             new java.util.concurrent.atomic.AtomicBoolean(false);
+    private volatile Thread reconnectThread;
     private volatile WebSocketClient client;
     private volatile Status status = Status.OFFLINE;
     private volatile boolean stopped = false;
@@ -60,9 +62,39 @@ public final class BurrowConnection {
         worker.start();
     }
 
+    /** User-triggered immediate retry: cancels any backoff sleep and reconnects now. */
+    public synchronized void reconnectNow() {
+        if (stopped) {
+            return;
+        }
+        Thread sleeper = this.reconnectThread;
+        this.reconnectThread = null;
+        if (sleeper != null) {
+            sleeper.interrupt();
+        }
+        reconnectScheduled.set(false);
+        WebSocketClient old = this.client;
+        this.client = null;
+        if (old != null) {
+            try {
+                old.close();
+            } catch (Exception ignored) {
+            }
+        }
+        attempts = 0;
+        status = Status.OFFLINE;
+        connectAsync();
+    }
+
     public void stop() {
         stopped = true;
+        Thread sleeper = this.reconnectThread;
+        this.reconnectThread = null;
+        if (sleeper != null) {
+            sleeper.interrupt();
+        }
         WebSocketClient ws = client;
+        client = null;
         if (ws != null) {
             ws.close();
         }
@@ -81,7 +113,11 @@ public final class BurrowConnection {
         WebSocketClient ws = new WebSocketClient(uri) {
             @Override
             public void onOpen(ServerHandshake handshake) {
-                attempts = 0;
+                if (client != this || stopped) {
+                    close();
+                    return;
+                }
+                startHandshakeWatchdog(this);
                 JsonObject hello = Protocol.msg(Protocol.OP_HELLO);
                 if (DevIdentity.isDev()) {
                     String name = DevIdentity.username();
@@ -93,13 +129,16 @@ public final class BurrowConnection {
                     hello.addProperty("name", MojangAuth.username());
                     hello.addProperty("uuid", MojangAuth.profileIdString());
                 }
-                send(hello.toString());
+                sendHandshake(this, hello);
             }
 
             @Override
             public void onMessage(String message) {
+                if (client != this) {
+                    return;
+                }
                 try {
-                    handle(JsonParser.parseString(message).getAsJsonObject());
+                    handle(this, JsonParser.parseString(message).getAsJsonObject());
                 } catch (Exception e) {
                     LOG.warn("unreadable message from Burrow server: {}", message, e);
                 }
@@ -107,32 +146,87 @@ public final class BurrowConnection {
 
             @Override
             public void onClose(int code, String reason, boolean remote) {
-                status = Status.OFFLINE;
+                if (client != this) {
+                    return;
+                }
+                client = null;
+                boolean wasConnected = (status == Status.CONNECTED);
+                if (status != Status.ERROR) {
+                    status = Status.OFFLINE;
+                }
                 if (!stopped) {
-                    scheduleReconnect();
+                    LOG.info("Burrow signaling connection closed (code={}, remote={}, reason={})",
+                            code, remote, reason == null || reason.isEmpty() ? "<none>" : reason);
+                    if (wasConnected || status == Status.OFFLINE) {
+                        scheduleReconnect(0L);
+                    }
                 }
             }
 
             @Override
             public void onError(Exception ex) {
-                // Handled through onClose; logged here for diagnostics.
-                LOG.debug("websocket error", ex);
+                if (client != this || stopped) {
+                    return;
+                }
+                LOG.warn("Burrow websocket error: {}", ex.toString());
             }
         };
         ws.setDaemon(true);
         this.client = ws;
         try {
             if (!ws.connectBlocking(10, TimeUnit.SECONDS)) {
-                status = Status.ERROR;
-                scheduleReconnect();
+                if (this.client == ws) {
+                    this.client = null;
+                    LOG.warn("Timed out connecting to Burrow server ({})", uri);
+                    status = Status.ERROR;
+                    scheduleReconnect(0L);
+                }
             }
         } catch (Exception e) {
-            status = Status.ERROR;
-            scheduleReconnect();
+            if (this.client == ws) {
+                this.client = null;
+                LOG.warn("Failed connecting to Burrow server ({}): {}", uri, e.toString());
+                status = Status.ERROR;
+                scheduleReconnect(0L);
+            }
         }
     }
 
-    private void scheduleReconnect() {
+    private void startHandshakeWatchdog(WebSocketClient ws) {
+        Thread watchdog = new Thread(() -> {
+            try {
+                Thread.sleep(HANDSHAKE_TIMEOUT_MS);
+            } catch (InterruptedException e) {
+                return;
+            }
+            if (!stopped && client == ws && status == Status.CONNECTING) {
+                LOG.warn("Burrow handshake timed out after {}s; reconnecting", HANDSHAKE_TIMEOUT_MS / 1000);
+                failHandshake(ws, "Connection timed out — retrying...", true, false);
+            }
+        }, "burrow-handshake-timeout");
+        watchdog.setDaemon(true);
+        watchdog.start();
+    }
+
+    private void failHandshake(WebSocketClient ws, String message, boolean retryable, boolean rateLimited) {
+        if (client != ws) {
+            return;
+        }
+        client = null;
+        status = Status.ERROR;
+        if (message != null && !message.isBlank()) {
+            state.setError(message);
+        }
+        try {
+            ws.close();
+        } catch (Exception ignored) {
+        }
+        if (retryable && !stopped) {
+            scheduleReconnect(rateLimited ? 10_000L : 0L);
+        }
+    }
+
+    private void scheduleReconnect(long minDelayMillis) {
         if (stopped) {
             return;
         }
@@ -143,7 +237,10 @@ public final class BurrowConnection {
             return;
         }
         attempts = Math.min(attempts + 1, 6);
-        long delayMillis = Math.min(1000L << attempts, 60000L);
+        long backoff = Math.min(1000L << attempts, 60_000L);
+        long jitter = java.util.concurrent.ThreadLocalRandom.current().nextLong(250L, 1500L);
+        long delayMillis = Math.min(Math.max(backoff, minDelayMillis) + jitter, 65_000L);
+        LOG.info("Scheduling Burrow reconnect attempt #{} in {}ms", attempts, delayMillis);
         Thread sleeper = new Thread(() -> {
             try {
                 Thread.sleep(delayMillis);
@@ -152,29 +249,35 @@ public final class BurrowConnection {
                 reconnectScheduled.set(false);
                 return;
             }
+            if (reconnectThread == Thread.currentThread()) {
+                reconnectThread = null;
+            }
             reconnectScheduled.set(false);
             connectAsync();
         }, "burrow-reconnect");
         sleeper.setDaemon(true);
+        this.reconnectThread = sleeper;
         sleeper.start();
     }
 
-    private void handle(JsonObject msg) {
+    private void handle(WebSocketClient ws, JsonObject msg) {
         String op = msg.has("op") ? msg.get("op").getAsString() : "";
         switch (op) {
             case Protocol.OP_AUTH_CHALLENGE -> {
                 String serverId = str(msg, "serverId");
                 MojangAuth.joinServerAsync(
                         serverId,
-                        () -> send(Protocol.authVerify(serverId)),
-                        err -> {
-                            LOG.warn("Mojang authentication failed: {}", err);
-                            state.setError(err);
+                        () -> sendHandshake(ws, Protocol.authVerify(serverId)),
+                        failure -> {
+                            LOG.warn("Mojang authentication failed (retryable={}, rateLimited={}): {}",
+                                    failure.retryable(), failure.rateLimited(), failure.message());
+                            failHandshake(ws, failure.message(), failure.retryable(), failure.rateLimited());
                         });
             }
             case Protocol.OP_WELCOME -> {
                 UUID self = msg.has("uuid") ? UUID.fromString(msg.get("uuid").getAsString()) : null;
                 String name = msg.has("name") ? msg.get("name").getAsString() : "?";
+                attempts = 0;
                 state.setSelf(self, name);
                 status = Status.CONNECTED;
                 LOG.info("connected to Burrow server as {}", name);
@@ -242,10 +345,25 @@ public final class BurrowConnection {
                     uuid(msg, "joinerUuid"),
                     str(msg, "joinSource"),
                     str(msg, "viaName"));
+            case Protocol.OP_VOICE_READY -> VoiceBridge.onVoiceReady(
+                    uuid(msg, "host"),
+                    str(msg, "roomId"),
+                    str(msg, "token"),
+                    str(msg, "relayPath"));
+            case Protocol.OP_RELAY_VOICE -> VoiceBridge.onRelayVoice(
+                    str(msg, "roomId"),
+                    str(msg, "token"),
+                    str(msg, "relayPath"),
+                    uuid(msg, "joinerUuid"));
             case Protocol.OP_ERROR -> {
                 String message = msg.has("message") ? msg.get("message").getAsString() : msg.toString();
                 LOG.warn("server error: {}", message);
-                state.setError(message);
+                if (status == Status.CONNECTING) {
+                    boolean busy = message.toLowerCase().contains("busy") || message.contains("429");
+                    failHandshake(ws, message, true, busy);
+                } else {
+                    state.setError(message);
+                }
             }
             default -> LOG.debug("unknown op: {}", op);
         }
@@ -387,9 +505,23 @@ public final class BurrowConnection {
 
     // ----- outgoing actions (used by the UI) -----
 
+    /** Handshake-only send (hello / auth.verify) permitted while status == CONNECTING. */
+    private boolean sendHandshake(WebSocketClient ws, JsonObject msg) {
+        if (ws == null || client != ws || !ws.isOpen()) {
+            return false;
+        }
+        try {
+            ws.send(msg.toString());
+            return true;
+        } catch (Exception e) {
+            LOG.warn("failed to send handshake {}: {}", msg.get("op"), e.toString());
+            return false;
+        }
+    }
+
     public boolean send(JsonObject msg) {
         WebSocketClient ws = client;
-        if (ws == null || !ws.isOpen()) {
+        if (status != Status.CONNECTED || ws == null || !ws.isOpen()) {
             return false;
         }
         try {
@@ -419,6 +551,10 @@ public final class BurrowConnection {
 
     public void joinBegin(UUID hostId) {
         send(Protocol.joinBegin(hostId));
+    }
+
+    public boolean voiceBegin(UUID hostId) {
+        return send(Protocol.voiceBegin(hostId));
     }
 
     public void sessionOpen(

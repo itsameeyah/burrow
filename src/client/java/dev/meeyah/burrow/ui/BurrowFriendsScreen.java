@@ -56,6 +56,7 @@ public class BurrowFriendsScreen extends Screen {
     private @Nullable UUID expandedFriend = null;
     private int page = 0;
     private boolean showingErrorFlash = false;
+    private @Nullable BurrowConnection.Status lastConnectionStatus = null;
     private boolean checkedServerPlayers = false;
 
     private int panelX;
@@ -109,6 +110,18 @@ public class BurrowFriendsScreen extends Screen {
                         rebuildWidgets();
                     }
                 }));
+
+        // Compact 1-click Retry button whenever Burrow is offline/errored so players
+        // never need to restart Minecraft to recover from transient Mojang/network errors.
+        BurrowConnection conn = BurrowClient.connection();
+        BurrowConnection.Status connStatus = conn == null ? BurrowConnection.Status.OFFLINE : conn.status();
+        this.lastConnectionStatus = connStatus;
+        if (conn != null && (connStatus == BurrowConnection.Status.ERROR || connStatus == BurrowConnection.Status.OFFLINE)) {
+            addRenderableWidget(Button.builder(Component.literal("Retry"), b -> {
+                conn.reconnectNow();
+                rebuildWidgets();
+            }).bounds(this.contentX + this.contentW - 20 - 4 - 46, this.panelY + BurrowUi.HEADER_TITLE_Y, 46, 20).build());
+        }
 
         // ----- Tab Data & Counts -----
         List<FriendsState.Friend> friends = sortedFriends();
@@ -592,7 +605,9 @@ public class BurrowFriendsScreen extends Screen {
         String flash = BurrowClient.friends().errorFlash();
         this.showingErrorFlash = (flash != null);
         if (flash != null) {
-            g.text(this.font, ellipsize(this.font, "! " + flash, 290),
+            int maxFlashW = (this.lastConnectionStatus == BurrowConnection.Status.ERROR
+                    || this.lastConnectionStatus == BurrowConnection.Status.OFFLINE) ? 252 : 290;
+            g.text(this.font, ellipsize(this.font, "! " + flash, maxFlashW),
                     this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, 0xFFFF9977, false);
         } else {
             g.text(this.font, statusText(), this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
@@ -670,7 +685,10 @@ public class BurrowFriendsScreen extends Screen {
     public void tick() {
         super.tick();
         BurrowClient.friends().pruneExpired();
-        if (this.showingErrorFlash && BurrowClient.friends().errorFlash() == null) {
+        BurrowConnection conn = BurrowClient.connection();
+        BurrowConnection.Status currentStatus = conn == null ? BurrowConnection.Status.OFFLINE : conn.status();
+        if (currentStatus != this.lastConnectionStatus
+                || (this.showingErrorFlash && BurrowClient.friends().errorFlash() == null)) {
             rebuildWidgets();
         }
     }
