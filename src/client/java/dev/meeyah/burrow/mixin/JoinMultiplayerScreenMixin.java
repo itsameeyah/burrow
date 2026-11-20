@@ -30,21 +30,32 @@ public abstract class JoinMultiplayerScreenMixin {
     protected abstract void onSelectedChange();
 
     @Unique
-    private final FriendsState.Listener burrow$listener = this::burrow$onFriendsChanged;
+    private FriendsState.Listener burrow$listener;
 
     @Unique
     private int burrow$pruneTick = 0;
 
+    @Unique
+    private FriendsState.Listener burrow$getListener() {
+        if (this.burrow$listener == null) {
+            this.burrow$listener = this::burrow$onFriendsChanged;
+        }
+        return this.burrow$listener;
+    }
+
     @Inject(method = "init", at = @At("TAIL"))
     private void burrow$initBurrowWorlds(CallbackInfo ci) {
-        BurrowClient.friends().removeListener(this.burrow$listener);
-        BurrowClient.friends().addListener(this.burrow$listener);
+        FriendsState.Listener listener = burrow$getListener();
+        BurrowClient.friends().removeListener(listener);
+        BurrowClient.friends().addListener(listener);
         burrow$onFriendsChanged();
     }
 
     @Inject(method = "removed", at = @At("HEAD"))
     private void burrow$cleanupBurrowWorlds(CallbackInfo ci) {
-        BurrowClient.friends().removeListener(this.burrow$listener);
+        if (this.burrow$listener != null) {
+            BurrowClient.friends().removeListener(this.burrow$listener);
+        }
     }
 
     @Inject(method = "tick", at = @At("TAIL"))
