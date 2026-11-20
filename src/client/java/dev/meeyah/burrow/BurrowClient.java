@@ -1,5 +1,6 @@
 package dev.meeyah.burrow;
 
+import dev.meeyah.burrow.compat.ModCompat;
 import dev.meeyah.burrow.config.BurrowConfig;
 import dev.meeyah.burrow.discord.DiscordRpc;
 import dev.meeyah.burrow.net.BurrowConnection;
@@ -31,6 +32,7 @@ public class BurrowClient implements ClientModInitializer {
         friends = new FriendsState();
         connection = new BurrowConnection(config, friends);
         HostPermissions.register();
+        ModCompat.register();
         ActivityTracker.register();
         DiscordRpc.start();
         ActivityTracker.pushIdle();
