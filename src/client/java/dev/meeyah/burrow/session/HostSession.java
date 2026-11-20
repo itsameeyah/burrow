@@ -1,6 +1,7 @@
 package dev.meeyah.burrow.session;
 
 import dev.meeyah.burrow.BurrowClient;
+import dev.meeyah.burrow.compat.ModCompat;
 import dev.meeyah.burrow.net.BurrowConnection;
 import dev.meeyah.burrow.net.RelayTunnel;
 import dev.meeyah.burrow.net.VoiceBridge;
@@ -197,6 +198,7 @@ public final class HostSession {
     /** Called on ServerLifecycleEvents.SERVER_STOPPING so stale state never leaks across worlds. */
     public static synchronized void onServerStopping() {
         ensureStopped();
+        ModCompat.clearAllSessions();
         capturedInitializer = null;
         wePublished = false;
         stateServer = null;

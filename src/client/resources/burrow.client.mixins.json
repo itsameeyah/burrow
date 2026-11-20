@@ -17,7 +17,13 @@
 		"ServerPlayerMixin",
 		"RegistrySyncManagerMixin",
 		"ClientRegistrySyncHandlerMixin",
-		"DisconnectedScreenMixin"
+		"DisconnectedScreenMixin",
+		"ServerCommonPacketListenerMixin",
+		"DisplayAccessor",
+		"ItemDisplayAccessor",
+		"EntityAccessor",
+		"SectionBlocksUpdatePacketAccessor",
+		"EntityEventPacketAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1
