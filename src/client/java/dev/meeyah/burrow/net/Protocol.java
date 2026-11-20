@@ -43,6 +43,8 @@ public final class Protocol {
     public static final String OP_USERS_CHECK_RESULT = "users.check.result";
     public static final String OP_JOIN_READY = "join.ready";
     public static final String OP_RELAY_HOST = "relay.host";
+    public static final String OP_VOICE_READY = "voice.ready";
+    public static final String OP_RELAY_VOICE = "relay.voice";
     public static final String OP_ERROR = "error";
 
     private Protocol() {}
@@ -160,6 +162,14 @@ public final class Protocol {
     public static JsonObject joinBegin(UUID hostId) {
         JsonObject o = msg(OP_JOIN_BEGIN);
         o.addProperty("host", hostId.toString());
+        return o;
+    }
+
+    /** Ask for a dedicated voice relay room to a hosted world (Simple Voice Chat). */
+    public static JsonObject voiceBegin(UUID hostId) {
+        JsonObject o = msg(OP_JOIN_BEGIN);
+        o.addProperty("host", hostId.toString());
+        o.addProperty("channel", "voice");
         return o;
     }
 }

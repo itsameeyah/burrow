@@ -19,13 +19,21 @@ import java.util.List;
 @Mixin(ServerSelectionList.class)
 public abstract class ServerSelectionListMixin implements BurrowMultiplayerWorlds.BurrowServerListAccess {
     @Unique
-    private final ServerSelectionList.Entry burrow$header = new BurrowMultiplayerWorlds.HeaderEntry();
+    private ServerSelectionList.Entry burrow$header;
 
     @Unique
-    private List<ServerSelectionList.Entry> burrow$entries = List.of();
+    private List<ServerSelectionList.Entry> burrow$entries;
 
     @Shadow
     private void refreshEntries() {}
+
+    @Unique
+    private ServerSelectionList.Entry burrow$getHeader() {
+        if (this.burrow$header == null) {
+            this.burrow$header = new BurrowMultiplayerWorlds.HeaderEntry();
+        }
+        return this.burrow$header;
+    }
 
     @ModifyArg(
             method = "refreshEntries",
@@ -36,16 +44,17 @@ public abstract class ServerSelectionListMixin implements BurrowMultiplayerWorld
             index = 0
     )
     private Collection<ServerSelectionList.Entry> burrow$appendBurrowWorlds(Collection<ServerSelectionList.Entry> entries) {
-        if (this.burrow$entries.isEmpty()) {
+        if (this.burrow$entries == null || this.burrow$entries.isEmpty()) {
             return entries;
         }
+        ServerSelectionList.Entry header = burrow$getHeader();
         if (entries instanceof List<ServerSelectionList.Entry> list) {
-            list.add(this.burrow$header);
+            list.add(header);
             list.addAll(this.burrow$entries);
             return list;
         }
         List<ServerSelectionList.Entry> merged = new ArrayList<>(entries);
-        merged.add(this.burrow$header);
+        merged.add(header);
         merged.addAll(this.burrow$entries);
         return merged;
     }

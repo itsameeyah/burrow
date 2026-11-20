@@ -4,6 +4,7 @@ plugins {
 
 repositories {
 	mavenCentral()
+	maven { url = 'https://maven.maxhenkel.de/repository/public' }
 }
 
 loom {
@@ -39,6 +40,9 @@ dependencies {
 
 	// WebSocket client, bundled into the mod jar (jar-in-jar via include).
 	clientImplementation include("org.java-websocket:Java-WebSocket:${project.websocket_version}")
+
+	// Optional compile-only Simple Voice Chat plugin API (never bundled; only loaded when SVC is installed).
+	clientCompileOnly "de.maxhenkel.voicechat:voicechat-api:2.6.0"
 }
 
 processResources {

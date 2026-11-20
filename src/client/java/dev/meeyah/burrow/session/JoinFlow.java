@@ -37,6 +37,31 @@ public final class JoinFlow {
         return join != null && !join.consumed.get() && !join.expired() ? join.tunnel : null;
     }
 
+    /**
+     * If the local client is currently connected to a Burrow-hosted world
+     * ({@code <hostUuid>.burrow[:port]}), returns that host's UUID; otherwise {@code null}.
+     */
+    public static @Nullable UUID currentBurrowHostUuid() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.getSingleplayerServer() != null) {
+            return null;
+        }
+        ServerData server = mc.getCurrentServer();
+        if (server == null || server.ip == null) {
+            return null;
+        }
+        String ip = server.ip.trim();
+        int idx = ip.toLowerCase().indexOf(".burrow");
+        if (idx <= 0) {
+            return null;
+        }
+        try {
+            return UUID.fromString(ip.substring(0, idx));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     /** Consuming take, used by the Connection mixin exactly once per join. */
     public static @Nullable RelayTunnel consumeActive() {
         ActiveJoin join = active;
