@@ -14,7 +14,10 @@
 		"ConnectionMixin",
 		"ConnectionMemoryMixin",
 		"ItemEntityMixin",
-		"ServerPlayerMixin"
+		"ServerPlayerMixin",
+		"RegistrySyncManagerMixin",
+		"ClientRegistrySyncHandlerMixin",
+		"DisconnectedScreenMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

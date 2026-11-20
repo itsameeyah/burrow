@@ -145,6 +145,7 @@ public final class HostWorldState {
     private volatile Role defaultRole = Role.MEMBER;
     private volatile int maxPlayers = 8;
     private volatile boolean locked = false;
+    private volatile boolean allowMismatchedMods = true;
     private final Map<UUID, Role> roles = new ConcurrentHashMap<>();
     private final Map<UUID, String> banned = new ConcurrentHashMap<>();
     private final Map<UUID, JoinInfo> joinInfos = new ConcurrentHashMap<>();
@@ -163,6 +164,7 @@ public final class HostWorldState {
                 if (o.has("invitePerm")) state.invitePerm = InvitePerm.fromWire(o.get("invitePerm").getAsString());
                 if (o.has("defaultRole")) state.defaultRole = Role.fromWire(o.get("defaultRole").getAsString());
                 if (o.has("maxPlayers")) state.maxPlayers = Math.clamp(o.get("maxPlayers").getAsInt(), 2, 32);
+                if (o.has("allowMismatchedMods")) state.allowMismatchedMods = o.get("allowMismatchedMods").getAsBoolean();
                 if (o.has("roles") && o.get("roles").isJsonObject()) {
                     for (Map.Entry<String, JsonElement> e : o.getAsJsonObject("roles").entrySet()) {
                         try {
@@ -191,6 +193,7 @@ public final class HostWorldState {
             o.addProperty("invitePerm", this.invitePerm.wire());
             o.addProperty("defaultRole", this.defaultRole.wire());
             o.addProperty("maxPlayers", this.maxPlayers);
+            o.addProperty("allowMismatchedMods", this.allowMismatchedMods);
 
             JsonObject rolesObj = new JsonObject();
             for (Map.Entry<UUID, Role> e : this.roles.entrySet()) {
@@ -224,6 +227,9 @@ public final class HostWorldState {
 
     public boolean locked() { return locked; }
     public void setLocked(boolean locked) { this.locked = locked; }
+
+    public boolean allowMismatchedMods() { return allowMismatchedMods; }
+    public void setAllowMismatchedMods(boolean allow) { this.allowMismatchedMods = allow; save(); }
 
     public Role roleOf(UUID uuid) {
         return roles.getOrDefault(uuid, defaultRole);

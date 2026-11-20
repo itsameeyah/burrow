@@ -9,6 +9,7 @@ import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -26,8 +27,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class JoinFlow {
     /** A join is only "active" for this long after join.ready. */
     private static final long ACTIVE_WINDOW_MS = 60_000;
+    private static final long MISMATCH_TTL_MS = 30_000;
+
+    public record RegistryMismatch(UUID hostUuid, List<String> namespaces, int missingCount, long recordedAtMs) {
+        public boolean expired() {
+            return System.currentTimeMillis() - recordedAtMs > MISMATCH_TTL_MS;
+        }
+    }
 
     private static volatile @Nullable ActiveJoin active;
+    private static volatile @Nullable UUID lastConnectingHostUuid;
+    private static volatile long lastConnectingAtMs;
+    private static volatile @Nullable RegistryMismatch recentMismatch;
+    private static volatile @Nullable UUID bypassMismatchHostUuid;
+    private static volatile long bypassMismatchExpiresAtMs;
 
     private JoinFlow() {}
 
@@ -62,6 +75,74 @@ public final class JoinFlow {
         }
     }
 
+    /**
+     * Returns the Burrow host UUID while either already in a {@code .burrow} world
+     * or mid-handshake during configuration. Always returns {@code null} for
+     * non-Burrow servers so external servers are never affected.
+     */
+    public static @Nullable UUID currentOrConnectingHostUuid() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.getSingleplayerServer() != null) {
+            return null;
+        }
+        ServerData server = mc.getCurrentServer();
+        if (server != null && server.ip != null && !server.ip.isBlank()) {
+            return parseBurrowHostUuid(server.ip);
+        }
+        UUID pending = lastConnectingHostUuid;
+        if (pending != null && System.currentTimeMillis() - lastConnectingAtMs <= ACTIVE_WINDOW_MS) {
+            return pending;
+        }
+        return null;
+    }
+
+    private static @Nullable UUID parseBurrowHostUuid(String rawIp) {
+        String ip = rawIp.trim();
+        int idx = ip.toLowerCase().indexOf(".burrow");
+        if (idx <= 0) {
+            return null;
+        }
+        try {
+            return UUID.fromString(ip.substring(0, idx));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    public static void recordRegistryMismatch(UUID hostUuid, List<String> namespaces, int missingCount) {
+        if (hostUuid == null) return;
+        recentMismatch = new RegistryMismatch(hostUuid, List.copyOf(namespaces), missingCount, System.currentTimeMillis());
+    }
+
+    public static @Nullable RegistryMismatch peekRecentRegistryMismatch() {
+        RegistryMismatch m = recentMismatch;
+        if (m == null || m.expired()) {
+            recentMismatch = null;
+            return null;
+        }
+        return m;
+    }
+
+    /** One-shot retry that strips unknown remote registry entries for {@code hostUuid}. */
+    public static void retryIgnoringRegistryMismatch(UUID hostUuid) {
+        if (hostUuid == null) return;
+        recentMismatch = null;
+        bypassMismatchHostUuid = hostUuid;
+        bypassMismatchExpiresAtMs = System.currentTimeMillis() + ACTIVE_WINDOW_MS;
+        beginByHostUuid(hostUuid);
+    }
+
+    public static boolean consumeRegistryMismatchBypass(@Nullable UUID hostUuid) {
+        if (hostUuid == null) return false;
+        UUID target = bypassMismatchHostUuid;
+        if (target != null && target.equals(hostUuid) && System.currentTimeMillis() <= bypassMismatchExpiresAtMs) {
+            bypassMismatchHostUuid = null;
+            bypassMismatchExpiresAtMs = 0L;
+            return true;
+        }
+        return false;
+    }
+
     /** Consuming take, used by the Connection mixin exactly once per join. */
     public static @Nullable RelayTunnel consumeActive() {
         ActiveJoin join = active;
@@ -90,6 +171,8 @@ public final class JoinFlow {
         // Clear any unconsumed Burrow join so ConnectionMixin never intercepts this connect.
         ActiveJoin prev = active;
         active = null;
+        lastConnectingHostUuid = null;
+        recentMismatch = null;
         if (prev != null && !prev.consumed.get()) {
             prev.tunnel.close();
         }
@@ -130,6 +213,8 @@ public final class JoinFlow {
                 previous.tunnel.close();
             }
             Minecraft mc = Minecraft.getInstance();
+            lastConnectingHostUuid = hostUuid;
+            lastConnectingAtMs = System.currentTimeMillis();
             mc.execute(() -> {
                 String fakeAddress = hostUuid + ".burrow";
                 ServerAddress address = new ServerAddress(fakeAddress, 25565);
