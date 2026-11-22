@@ -457,7 +457,7 @@ public final class BurrowUi {
             int ix = getX() + 2;
             int iy = getY() + 2;
             if (!this.enabled) {
-                g.blit(RenderPipelines.GUI_TEXTURED, ICON_DISCORD, ix, iy, 0.0f, 0.0f, 16, 16, 16, 16, 0xFF787886);
+                g.blit(RenderPipelines.GUI_TEXTURED, ICON_DISCORD, ix, iy, 0.0f, 0.0f, 16, 16, 16, 16, 0xFF383842);
                 // Crisp dark-outlined red diagonal slash
                 for (int i = 0; i < 12; i++) {
                     int sx = getX() + 4 + i;
