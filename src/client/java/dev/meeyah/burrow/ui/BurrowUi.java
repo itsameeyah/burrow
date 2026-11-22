@@ -45,6 +45,9 @@ public final class BurrowUi {
     public static final Identifier TAB_SELECTED_HOVER = Identifier.withDefaultNamespace("widget/tab_selected_highlighted");
     public static final Identifier BUTTON_IDLE = Identifier.withDefaultNamespace("widget/button");
     public static final Identifier BUTTON_HOVER = Identifier.withDefaultNamespace("widget/button_highlighted");
+    private static final Identifier ICON_DISCORD = Identifier.fromNamespaceAndPath("burrow", "textures/gui/icons/discord.png");
+    private static final Identifier ICON_DND_ON = Identifier.fromNamespaceAndPath("burrow", "textures/gui/icons/dnd_on.png");
+    private static final Identifier ICON_DND_OFF = Identifier.fromNamespaceAndPath("burrow", "textures/gui/icons/dnd_off.png");
 
     // Full-alpha ARGB palette tuned for vanilla dark panels.
     public static final int TEXT_PRIMARY = 0xFFFFFFFF;
@@ -127,14 +130,14 @@ public final class BurrowUi {
     }
 
     private static final String[] STAR_FILLED = {
-            "....H....",
-            "...HHH...",
-            "HHHHHHHHH",
-            ".GGGGGGG.",
-            "..GGGGG..",
-            ".GGGGGGG.",
-            ".GGG.GGG.",
-            ".DD...DD."
+            "....#....",
+            "...###...",
+            "#########",
+            ".#######.",
+            "..#####..",
+            ".#######.",
+            ".###.###.",
+            ".##...##."
     };
 
     private static final String[] STAR_OUTLINE = {
@@ -148,34 +151,15 @@ public final class BurrowUi {
             ".##...##."
     };
 
-    /** Crisp symmetric 9x8 pixel-art 5-point star icon (shaded gold when favorited, clean connected outline otherwise). */
+    /** Crisp symmetric 9x8 pixel-art 5-point star icon (flat yellow when favorited, clean connected outline otherwise). */
     public static void drawStar(GuiGraphicsExtractor g, int x, int y, boolean favorited, boolean hovered) {
-        if (favorited) {
-            int hi = hovered ? 0xFFFFF0A8 : 0xFFFFE47A;
-            int mid = hovered ? 0xFFFFD859 : 0xFFFFC83D;
-            int dark = hovered ? 0xFFF0B22E : 0xFFE09F1F;
-            for (int row = 0; row < STAR_FILLED.length; row++) {
-                String line = STAR_FILLED[row];
-                for (int col = 0; col < line.length(); col++) {
-                    int argb = switch (line.charAt(col)) {
-                        case 'H' -> hi;
-                        case 'G' -> mid;
-                        case 'D' -> dark;
-                        default -> 0;
-                    };
-                    if (argb != 0) {
-                        g.fill(x + col, y + row, x + col + 1, y + row + 1, argb);
-                    }
-                }
-            }
-        } else {
-            int c = hovered ? STAR_HOVER : STAR_IDLE;
-            for (int row = 0; row < STAR_OUTLINE.length; row++) {
-                String line = STAR_OUTLINE[row];
-                for (int col = 0; col < line.length(); col++) {
-                    if (line.charAt(col) == '#') {
-                        g.fill(x + col, y + row, x + col + 1, y + row + 1, c);
-                    }
+        String[] grid = favorited ? STAR_FILLED : STAR_OUTLINE;
+        int color = favorited ? STAR_FAVORITE : (hovered ? STAR_HOVER : STAR_IDLE);
+        for (int row = 0; row < grid.length; row++) {
+            String line = grid[row];
+            for (int col = 0; col < line.length(); col++) {
+                if (line.charAt(col) == '#') {
+                    g.fill(x + col, y + row, x + col + 1, y + row + 1, color);
                 }
             }
         }
@@ -405,37 +389,6 @@ public final class BurrowUi {
 
     /** Compact 20x20 vanilla icon button for Do Not Disturb (replaces Incognito). */
     public static final class DndButton extends AbstractWidget {
-        private static final String[] BELL_ICON = {
-                "......KK......",
-                "....KKHHKK....",
-                "...KHHHHHHK...",
-                "..KHHBBBBHHK..",
-                "..KHBBBBBBHK..",
-                "..KBBBBBBBBK..",
-                "..KBBBBBBBBK..",
-                ".KBBBBBBBBBBK.",
-                ".KDDDDDDDDDDK.",
-                "KDDDDDDDDDDDDK",
-                "KKKKKKKKKKKKKK",
-                ".....KDDK.....",
-                "......KK......"
-        };
-
-        private static final String[] DND_ON_ICON = {
-                "...KKKKKK...",
-                ".KKHHHHHHKK.",
-                ".KHBBBBBBHK.",
-                "KBBBBBBBBBBK",
-                "KBBBBBBBBBBK",
-                "KBBWWWWWWBBK",
-                "KBBWWWWWWBBK",
-                "KBBBBBBBBBBK",
-                "KDDDDDDDDDDK",
-                ".KDDDDDDDDK.",
-                ".KKDDDDDDKK.",
-                "...KKKKKK..."
-        };
-
         private final boolean dnd;
         private final Runnable onToggle;
 
@@ -456,13 +409,8 @@ public final class BurrowUi {
                     : BurrowVanillaSprites.BUTTON_IDLE;
             BurrowVanillaSprites.draw(g, sprite, getX(), getY(), getWidth(), getHeight());
 
-            if (this.dnd) {
-                drawPixelArt(g, getX() + 4, getY() + 4, DND_ON_ICON,
-                        0xFF1D1E26, 0xFFFF7A85, 0xFFE64855, 0xFFC02E3C, 0xFFFFFFFF, 0xFFFFFFFF);
-            } else {
-                drawPixelArt(g, getX() + 3, getY() + 3, BELL_ICON,
-                        0xFF1D1E26, 0xFFFFEA8A, 0xFFEBC042, 0xFFC29024, 0xFFFFFFFF, 0xFFFFFFFF);
-            }
+            Identifier icon = this.dnd ? ICON_DND_ON : ICON_DND_OFF;
+            g.blit(RenderPipelines.GUI_TEXTURED, icon, getX() + 2, getY() + 2, 0.0f, 0.0f, 16, 16, 16, 16);
         }
 
         @Override
@@ -479,20 +427,6 @@ public final class BurrowUi {
 
     /** Compact 20x20 vanilla icon button for toggling Discord Rich Presence. */
     public static final class DiscordRpcButton extends AbstractWidget {
-        private static final String[] CLYDE_ICON = {
-                "..KKKK..KKKK..",
-                ".KHHHHKKHHHHK.",
-                ".KHHHHHHHHHHK.",
-                "KBBBBBBBBBBBBK",
-                "KBBWWBBBBWWBBK",
-                "KBBWWBBBBWWBBK",
-                "KBBBBBBBBBBBBK",
-                "KDDDDDDDDDDDDK",
-                ".KDDDKKKKDDDK.",
-                ".KDDK....KDDK.",
-                "..KK......KK.."
-        };
-
         private final boolean enabled;
         private final boolean pausedByDnd;
         private final Runnable onToggle;
@@ -520,11 +454,10 @@ public final class BurrowUi {
                     : BurrowVanillaSprites.BUTTON_IDLE;
             BurrowVanillaSprites.draw(g, sprite, getX(), getY(), getWidth(), getHeight());
 
-            int ox = getX() + 3;
-            int oy = getY() + 4;
+            int ix = getX() + 2;
+            int iy = getY() + 2;
             if (!this.enabled) {
-                drawPixelArt(g, ox, oy, CLYDE_ICON,
-                        0xFF1D1E26, 0xFF9494A2, 0xFF747482, 0xFF585864, 0xFF282830, 0xFF282830);
+                g.blit(RenderPipelines.GUI_TEXTURED, ICON_DISCORD, ix, iy, 0.0f, 0.0f, 16, 16, 16, 16, 0xFF787886);
                 // Crisp dark-outlined red diagonal slash
                 for (int i = 0; i < 12; i++) {
                     int sx = getX() + 4 + i;
@@ -534,11 +467,9 @@ public final class BurrowUi {
                     g.fill(sx, sy, sx + 1, sy + 1, 0xFFE64855);
                 }
             } else if (this.pausedByDnd) {
-                drawPixelArt(g, ox, oy, CLYDE_ICON,
-                        0xFF1D1E26, 0xFF98A0C4, 0xFF7A82A8, 0xFF60688C, 0xFFE6E8F2, 0xFFD0D4E4);
+                g.blit(RenderPipelines.GUI_TEXTURED, ICON_DISCORD, ix, iy, 0.0f, 0.0f, 16, 16, 16, 16, 0x99FFFFFF);
             } else {
-                drawPixelArt(g, ox, oy, CLYDE_ICON,
-                        0xFF1D1E26, 0xFF7B8BFF, 0xFF5865F2, 0xFF4752C4, 0xFFFFFFFF, 0xFFE6EAFF);
+                g.blit(RenderPipelines.GUI_TEXTURED, ICON_DISCORD, ix, iy, 0.0f, 0.0f, 16, 16, 16, 16);
             }
         }
 
@@ -551,37 +482,6 @@ public final class BurrowUi {
         @Override
         protected void updateWidgetNarration(NarrationElementOutput output) {
             defaultButtonNarrationText(output);
-        }
-    }
-
-    private static void drawPixelArt(
-            GuiGraphicsExtractor g,
-            int ox,
-            int oy,
-            String[] grid,
-            int colK,
-            int colH,
-            int colB,
-            int colD,
-            int colW,
-            int colw
-    ) {
-        for (int row = 0; row < grid.length; row++) {
-            String line = grid[row];
-            for (int col = 0; col < line.length(); col++) {
-                int argb = switch (line.charAt(col)) {
-                    case 'K' -> colK;
-                    case 'H' -> colH;
-                    case 'B' -> colB;
-                    case 'D' -> colD;
-                    case 'W' -> colW;
-                    case 'w' -> colw;
-                    default -> 0;
-                };
-                if (argb != 0) {
-                    g.fill(ox + col, oy + row, ox + col + 1, oy + row + 1, argb);
-                }
-            }
         }
     }
 
