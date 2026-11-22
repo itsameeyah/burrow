@@ -6,13 +6,13 @@ Burrow GUI Icon Third-Party Licenses
    License: CC0 1.0 Universal (Public Domain)
    Note: The Discord name and Clyde logo are trademarks of Discord Inc.
 
-2. dnd_on.png (chaicon-forbidden.png) & dnd_off.png (chaicon-bell.png)
-   Source: https://github.com/clayathan/chaicon
+2. dnd_on.png (bell-with-cancellation-stroke-filled) & dnd_off.png (bell-filled)
+   Derived from Dinkie Icons by atelierAnchor (https://github.com/atelier-anchor/dinkie-icons)
    License: MIT License
 
    MIT License
 
-   Copyright (c) 2025 clay
+   Copyright (c) 2021--2025 atelierAnchor
 
    Permission is hereby granted, free of charge, to any person obtaining a copy
    of this software and associated documentation files (the "Software"), to deal
