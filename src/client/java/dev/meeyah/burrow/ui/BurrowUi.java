@@ -1,11 +1,14 @@
 package dev.meeyah.burrow.ui;
 
+import dev.meeyah.burrow.BurrowClient;
+import dev.meeyah.burrow.state.UpdateChecker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
@@ -74,6 +77,11 @@ public final class BurrowUi {
 
     private BurrowUi() {}
 
+    /** Built-in vanilla Minecraft font (ignores third-party resource-pack font recolors). */
+    public static Font font() {
+        return BurrowVanillaFont.get();
+    }
+
     /** Outer vanilla 9-slice modal panel (uses explicit burrow:panel_bg override or built-in vanilla). */
     public static void drawModalPanel(GuiGraphicsExtractor g, int x, int y, int w, int h) {
         BurrowVanillaSprites.draw(g, BurrowVanillaSprites.PANEL_BG, x, y, w, h);
@@ -118,35 +126,213 @@ public final class BurrowUi {
         return w;
     }
 
-    /** Crisp 9x9 pixel-art 5-point star icon (filled gold when favorited, clean outline otherwise). */
+    private static final String[] STAR_FILLED = {
+            "....H....",
+            "...HHH...",
+            "HHHHHHHHH",
+            ".GGGGGGG.",
+            "..GGGGG..",
+            ".GGGGGGG.",
+            ".GGG.GGG.",
+            ".DD...DD."
+    };
+
+    private static final String[] STAR_OUTLINE = {
+            "....#....",
+            "...#.#...",
+            "####.####",
+            ".#.....#.",
+            "..#...#..",
+            ".#..#..#.",
+            ".#.#.#.#.",
+            ".##...##."
+    };
+
+    /** Crisp symmetric 9x8 pixel-art 5-point star icon (shaded gold when favorited, clean connected outline otherwise). */
     public static void drawStar(GuiGraphicsExtractor g, int x, int y, boolean favorited, boolean hovered) {
-        int c = favorited ? STAR_FAVORITE : (hovered ? STAR_HOVER : STAR_IDLE);
         if (favorited) {
-            g.fill(x + 4, y, x + 5, y + 2, c);
-            g.fill(x + 3, y + 2, x + 6, y + 3, c);
-            g.fill(x, y + 3, x + 9, y + 4, c);
-            g.fill(x + 1, y + 4, x + 8, y + 5, c);
-            g.fill(x + 2, y + 5, x + 7, y + 6, c);
-            g.fill(x + 2, y + 6, x + 4, y + 8, c);
-            g.fill(x + 5, y + 6, x + 7, y + 8, c);
-            g.fill(x + 1, y + 7, x + 3, y + 9, c);
-            g.fill(x + 6, y + 7, x + 8, y + 9, c);
+            int hi = hovered ? 0xFFFFF0A8 : 0xFFFFE47A;
+            int mid = hovered ? 0xFFFFD859 : 0xFFFFC83D;
+            int dark = hovered ? 0xFFF0B22E : 0xFFE09F1F;
+            for (int row = 0; row < STAR_FILLED.length; row++) {
+                String line = STAR_FILLED[row];
+                for (int col = 0; col < line.length(); col++) {
+                    int argb = switch (line.charAt(col)) {
+                        case 'H' -> hi;
+                        case 'G' -> mid;
+                        case 'D' -> dark;
+                        default -> 0;
+                    };
+                    if (argb != 0) {
+                        g.fill(x + col, y + row, x + col + 1, y + row + 1, argb);
+                    }
+                }
+            }
         } else {
-            // Crisp hollow 9x9 star outline
-            g.fill(x + 4, y, x + 5, y + 2, c);
-            g.fill(x + 3, y + 2, x + 4, y + 3, c);
-            g.fill(x + 5, y + 2, x + 6, y + 3, c);
-            g.fill(x, y + 3, x + 3, y + 4, c);
-            g.fill(x + 6, y + 3, x + 9, y + 4, c);
-            g.fill(x + 1, y + 4, x + 2, y + 5, c);
-            g.fill(x + 7, y + 4, x + 8, y + 5, c);
-            g.fill(x + 2, y + 5, x + 3, y + 6, c);
-            g.fill(x + 6, y + 5, x + 7, y + 6, c);
-            g.fill(x + 2, y + 6, x + 3, y + 7, c);
-            g.fill(x + 4, y + 6, x + 5, y + 7, c);
-            g.fill(x + 6, y + 6, x + 7, y + 7, c);
-            g.fill(x + 1, y + 7, x + 3, y + 9, c);
-            g.fill(x + 6, y + 7, x + 8, y + 9, c);
+            int c = hovered ? STAR_HOVER : STAR_IDLE;
+            for (int row = 0; row < STAR_OUTLINE.length; row++) {
+                String line = STAR_OUTLINE[row];
+                for (int col = 0; col < line.length(); col++) {
+                    if (line.charAt(col) == '#') {
+                        g.fill(x + col, y + row, x + col + 1, y + row + 1, c);
+                    }
+                }
+            }
+        }
+    }
+
+    /** Convenience builders for authentic vanilla-textured buttons immune to third-party resource packs. */
+    public static VanillaButton button(String label, int x, int y, int w, int h, Runnable onPress) {
+        return new VanillaButton(x, y, w, h, Component.literal(label), b -> onPress.run());
+    }
+
+    public static VanillaButton button(Component label, int x, int y, int w, int h, Runnable onPress) {
+        return new VanillaButton(x, y, w, h, label, b -> onPress.run());
+    }
+
+    public static VanillaButton button(
+            Component label,
+            int x,
+            int y,
+            int w,
+            int h,
+            java.util.function.Consumer<VanillaButton> onPress
+    ) {
+        return new VanillaButton(x, y, w, h, label, onPress);
+    }
+
+    public static <T> VanillaCycleButton<T> cycleButton(
+            int x,
+            int y,
+            int w,
+            int h,
+            T[] values,
+            T initial,
+            java.util.function.Function<T, Component> labeler,
+            @Nullable java.util.function.Function<T, Component> tooltipper,
+            java.util.function.Consumer<T> onChange
+    ) {
+        return new VanillaCycleButton<>(x, y, w, h, values, initial, labeler, tooltipper, onChange);
+    }
+
+    /**
+     * Vanilla-styled button rendered via {@link BurrowVanillaSprites} +
+     * {@link BurrowVanillaFont} so third-party resource packs never clash with
+     * Burrow's dark-slate modal UI (still honors explicit {@code burrow:button} overrides).
+     */
+    public static class VanillaButton extends AbstractWidget {
+        private final java.util.function.Consumer<VanillaButton> onPress;
+
+        public VanillaButton(
+                int x,
+                int y,
+                int w,
+                int h,
+                Component label,
+                java.util.function.Consumer<VanillaButton> onPress
+        ) {
+            super(x, y, w, h, label);
+            this.onPress = onPress;
+        }
+
+        @Override
+        protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+            BurrowVanillaSprites.SpriteSpec sprite = !this.active
+                    ? BurrowVanillaSprites.BUTTON_DISABLED
+                    : (this.isHoveredOrFocused() ? BurrowVanillaSprites.BUTTON_HOVER : BurrowVanillaSprites.BUTTON_IDLE);
+            BurrowVanillaSprites.draw(g, sprite, getX(), getY(), getWidth(), getHeight());
+
+            Font font = font();
+            Component msg = getMessage();
+            int color;
+            if (!this.active) {
+                color = 0xFFA0A0A0;
+            } else if (msg.getStyle().getColor() != null) {
+                color = 0xFF000000 | msg.getStyle().getColor().getValue();
+            } else {
+                color = TEXT_PRIMARY;
+            }
+            int maxTextW = Math.max(8, getWidth() - 6);
+            String raw = msg.getString();
+            String display = font.width(raw) <= maxTextW
+                    ? raw
+                    : font.plainSubstrByWidth(raw, Math.max(4, maxTextW - font.width("..."))) + "...";
+            int textY = getY() + (getHeight() - 8) / 2;
+            g.centeredText(font, display, getX() + getWidth() / 2, textY, color);
+        }
+
+        @Override
+        public void onClick(MouseButtonEvent event, boolean doubleClick) {
+            if (!this.active) {
+                return;
+            }
+            playButtonClickSound(Minecraft.getInstance().getSoundManager());
+            this.onPress.accept(this);
+        }
+
+        @Override
+        protected void updateWidgetNarration(NarrationElementOutput output) {
+            defaultButtonNarrationText(output);
+        }
+    }
+
+    /** Vanilla-textured cycle button immune to third-party resource-pack button/font overrides. */
+    public static final class VanillaCycleButton<T> extends VanillaButton {
+        private final T[] values;
+        private int index;
+        private final java.util.function.Function<T, Component> labeler;
+        private final @Nullable java.util.function.Function<T, Component> tooltipper;
+        private final java.util.function.Consumer<T> onChange;
+
+        public VanillaCycleButton(
+                int x,
+                int y,
+                int w,
+                int h,
+                T[] values,
+                T initial,
+                java.util.function.Function<T, Component> labeler,
+                @Nullable java.util.function.Function<T, Component> tooltipper,
+                java.util.function.Consumer<T> onChange
+        ) {
+            super(x, y, w, h, labeler.apply(initial), b -> {});
+            this.values = values;
+            this.index = 0;
+            for (int i = 0; i < values.length; i++) {
+                if (values[i].equals(initial)) {
+                    this.index = i;
+                    break;
+                }
+            }
+            this.labeler = labeler;
+            this.tooltipper = tooltipper;
+            this.onChange = onChange;
+            refreshLabelAndTooltip();
+        }
+
+        private void refreshLabelAndTooltip() {
+            T val = this.values[this.index];
+            setMessage(this.labeler.apply(val));
+            if (this.tooltipper != null) {
+                Component tip = this.tooltipper.apply(val);
+                setTooltip(tip != null ? Tooltip.create(tip) : null);
+            }
+        }
+
+        @Override
+        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            if (!this.active || !this.visible || !isMouseOver(event.x(), event.y())) {
+                return false;
+            }
+            if (event.button() == 0 || event.button() == 1) {
+                playButtonClickSound(Minecraft.getInstance().getSoundManager());
+                int delta = (event.button() == 1 || (event.modifiers() & org.lwjgl.glfw.GLFW.GLFW_MOD_SHIFT) != 0) ? -1 : 1;
+                this.index = (this.index + delta + this.values.length) % this.values.length;
+                refreshLabelAndTooltip();
+                this.onChange.accept(this.values[this.index]);
+                return true;
+            }
+            return false;
         }
     }
 
@@ -180,7 +366,7 @@ public final class BurrowUi {
         }
     }
 
-    /** Crisp vanilla tab widget using Minecraft's widget/tab_* sprites. */
+    /** Crisp vanilla tab widget using Minecraft's built-in widget/tab_* sprites. */
     public static final class TabButton extends AbstractWidget {
         private final boolean selected;
         private final Runnable onPress;
@@ -197,7 +383,7 @@ public final class BurrowUi {
                     ? (this.isHoveredOrFocused() ? BurrowVanillaSprites.TAB_SELECTED_HOVER : BurrowVanillaSprites.TAB_SELECTED)
                     : (this.isHoveredOrFocused() ? BurrowVanillaSprites.TAB_HOVER : BurrowVanillaSprites.TAB_IDLE);
             BurrowVanillaSprites.draw(g, sprite, getX(), getY(), getWidth(), getHeight());
-            Font font = Minecraft.getInstance().font;
+            Font font = font();
             int color = this.selected ? TEXT_PRIMARY : (this.isHoveredOrFocused() ? 0xFFE8E8EE : TEXT_SECONDARY);
             int textY = getY() + (getHeight() - 8) / 2 + (this.selected ? 0 : 1);
             g.centeredText(font, getMessage(), getX() + getWidth() / 2, textY, color);
@@ -219,6 +405,37 @@ public final class BurrowUi {
 
     /** Compact 20x20 vanilla icon button for Do Not Disturb (replaces Incognito). */
     public static final class DndButton extends AbstractWidget {
+        private static final String[] BELL_ICON = {
+                "......KK......",
+                "....KKHHKK....",
+                "...KHHHHHHK...",
+                "..KHHBBBBHHK..",
+                "..KHBBBBBBHK..",
+                "..KBBBBBBBBK..",
+                "..KBBBBBBBBK..",
+                ".KBBBBBBBBBBK.",
+                ".KDDDDDDDDDDK.",
+                "KDDDDDDDDDDDDK",
+                "KKKKKKKKKKKKKK",
+                ".....KDDK.....",
+                "......KK......"
+        };
+
+        private static final String[] DND_ON_ICON = {
+                "...KKKKKK...",
+                ".KKHHHHHHKK.",
+                ".KHBBBBBBHK.",
+                "KBBBBBBBBBBK",
+                "KBBBBBBBBBBK",
+                "KBBWWWWWWBBK",
+                "KBBWWWWWWBBK",
+                "KBBBBBBBBBBK",
+                "KDDDDDDDDDDK",
+                ".KDDDDDDDDK.",
+                ".KKDDDDDDKK.",
+                "...KKKKKK..."
+        };
+
         private final boolean dnd;
         private final Runnable onToggle;
 
@@ -239,31 +456,12 @@ public final class BurrowUi {
                     : BurrowVanillaSprites.BUTTON_IDLE;
             BurrowVanillaSprites.draw(g, sprite, getX(), getY(), getWidth(), getHeight());
 
-            int left = getX();
-            int top = getY();
             if (this.dnd) {
-                // Filled coral-red DND circle (10x10) with horizontal white minus bar
-                int red = DOT_DND;
-                g.fill(left + 7, top + 5, left + 13, top + 6, red);
-                g.fill(left + 6, top + 6, left + 14, top + 7, red);
-                g.fill(left + 5, top + 7, left + 15, top + 13, red);
-                g.fill(left + 6, top + 13, left + 14, top + 14, red);
-                g.fill(left + 7, top + 14, left + 13, top + 15, red);
-                // Crisp horizontal bar across the middle
-                g.fill(left + 7, top + 9, left + 13, top + 11, 0xFF1A1A1E);
+                drawPixelArt(g, getX() + 4, getY() + 4, DND_ON_ICON,
+                        0xFF1D1E26, 0xFFFF7A85, 0xFFE64855, 0xFFC02E3C, 0xFFFFFFFF, 0xFFFFFFFF);
             } else {
-                // Crisp silver outline circle with subtle minus bar (inactive DND icon)
-                int fg = 0xFFD8D8E4;
-                g.fill(left + 7, top + 5, left + 13, top + 6, fg);
-                g.fill(left + 6, top + 6, left + 7, top + 7, fg);
-                g.fill(left + 13, top + 6, left + 14, top + 7, fg);
-                g.fill(left + 5, top + 7, left + 6, top + 13, fg);
-                g.fill(left + 14, top + 7, left + 15, top + 13, fg);
-                g.fill(left + 6, top + 13, left + 7, top + 14, fg);
-                g.fill(left + 13, top + 13, left + 14, top + 14, fg);
-                g.fill(left + 7, top + 14, left + 13, top + 15, fg);
-                // Center dash
-                g.fill(left + 7, top + 9, left + 13, top + 11, fg);
+                drawPixelArt(g, getX() + 3, getY() + 3, BELL_ICON,
+                        0xFF1D1E26, 0xFFFFEA8A, 0xFFEBC042, 0xFFC29024, 0xFFFFFFFF, 0xFFFFFFFF);
             }
         }
 
@@ -281,6 +479,20 @@ public final class BurrowUi {
 
     /** Compact 20x20 vanilla icon button for toggling Discord Rich Presence. */
     public static final class DiscordRpcButton extends AbstractWidget {
+        private static final String[] CLYDE_ICON = {
+                "..KKKK..KKKK..",
+                ".KHHHHKKHHHHK.",
+                ".KHHHHHHHHHHK.",
+                "KBBBBBBBBBBBBK",
+                "KBBWWBBBBWWBBK",
+                "KBBWWBBBBWWBBK",
+                "KBBBBBBBBBBBBK",
+                "KDDDDDDDDDDDDK",
+                ".KDDDKKKKDDDK.",
+                ".KDDK....KDDK.",
+                "..KK......KK.."
+        };
+
         private final boolean enabled;
         private final boolean pausedByDnd;
         private final Runnable onToggle;
@@ -308,29 +520,25 @@ public final class BurrowUi {
                     : BurrowVanillaSprites.BUTTON_IDLE;
             BurrowVanillaSprites.draw(g, sprite, getX(), getY(), getWidth(), getHeight());
 
-            int left = getX();
-            int top = getY();
-            int fg = !this.enabled
-                    ? 0xFF7C7C8A
-                    : (this.pausedByDnd ? 0xFFA5A8C8 : 0xFF8A9AFF);
-            int eye = 0xFF1A1A22;
-
-            // Crisp 12x9 stylized Discord-gamepad silhouette centered in 20x20
-            g.fill(left + 6, top + 6, left + 8, top + 7, fg);
-            g.fill(left + 12, top + 6, left + 14, top + 7, fg);
-            g.fill(left + 5, top + 7, left + 15, top + 8, fg);
-            g.fill(left + 4, top + 8, left + 16, top + 12, fg);
-            g.fill(left + 5, top + 12, left + 15, top + 13, fg);
-            g.fill(left + 5, top + 13, left + 8, top + 14, fg);
-            g.fill(left + 12, top + 13, left + 15, top + 14, fg);
-            // Two symmetric eyes inside silhouette
-            g.fill(left + 7, top + 9, left + 9, top + 11, eye);
-            g.fill(left + 11, top + 9, left + 13, top + 11, eye);
-
+            int ox = getX() + 3;
+            int oy = getY() + 4;
             if (!this.enabled) {
-                for (int i = -4; i <= 4; i++) {
-                    g.fill(left + 9 + i, top + 9 + i, left + 11 + i, top + 10 + i, 0xFFFF8A8A);
+                drawPixelArt(g, ox, oy, CLYDE_ICON,
+                        0xFF1D1E26, 0xFF9494A2, 0xFF747482, 0xFF585864, 0xFF282830, 0xFF282830);
+                // Crisp dark-outlined red diagonal slash
+                for (int i = 0; i < 12; i++) {
+                    int sx = getX() + 4 + i;
+                    int sy = getY() + 4 + i;
+                    g.fill(sx, sy - 1, sx + 1, sy, 0xFF1D1E26);
+                    g.fill(sx, sy + 1, sx + 1, sy + 2, 0xFF1D1E26);
+                    g.fill(sx, sy, sx + 1, sy + 1, 0xFFE64855);
                 }
+            } else if (this.pausedByDnd) {
+                drawPixelArt(g, ox, oy, CLYDE_ICON,
+                        0xFF1D1E26, 0xFF98A0C4, 0xFF7A82A8, 0xFF60688C, 0xFFE6E8F2, 0xFFD0D4E4);
+            } else {
+                drawPixelArt(g, ox, oy, CLYDE_ICON,
+                        0xFF1D1E26, 0xFF7B8BFF, 0xFF5865F2, 0xFF4752C4, 0xFFFFFFFF, 0xFFE6EAFF);
             }
         }
 
@@ -346,10 +554,41 @@ public final class BurrowUi {
         }
     }
 
+    private static void drawPixelArt(
+            GuiGraphicsExtractor g,
+            int ox,
+            int oy,
+            String[] grid,
+            int colK,
+            int colH,
+            int colB,
+            int colD,
+            int colW,
+            int colw
+    ) {
+        for (int row = 0; row < grid.length; row++) {
+            String line = grid[row];
+            for (int col = 0; col < line.length(); col++) {
+                int argb = switch (line.charAt(col)) {
+                    case 'K' -> colK;
+                    case 'H' -> colH;
+                    case 'B' -> colB;
+                    case 'D' -> colD;
+                    case 'W' -> colW;
+                    case 'w' -> colw;
+                    default -> 0;
+                };
+                if (argb != 0) {
+                    g.fill(ox + col, oy + row, ox + col + 1, oy + row + 1, argb);
+                }
+            }
+        }
+    }
+
     /**
      * Reusable scissor-clipped, smooth-scrolling viewport widget with mouse-wheel
-     * damping and a draggable right-edge scrollbar. Child widgets are added at
-     * their un-scrolled screen coordinates (scroll = 0) and translated automatically.
+     * damping and a classic 6px vanilla Minecraft draggable scrollbar. Child widgets
+     * are added at their un-scrolled screen coordinates (scroll = 0) and translated automatically.
      */
     public static final class ScrollContainer extends AbstractWidget {
         @FunctionalInterface
@@ -358,6 +597,8 @@ public final class BurrowUi {
         }
 
         private record ChildEntry(AbstractWidget widget, int baseY) {}
+
+        private static final int SCROLLBAR_W = 6;
 
         private final List<ChildEntry> children = new ArrayList<>();
         private final DoubleConsumer onScrollChanged;
@@ -430,8 +671,9 @@ public final class BurrowUi {
             int w = getWidth();
             int h = getHeight();
 
+            int trackX = x + w - SCROLLBAR_W - 1;
             boolean inViewport = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
-            boolean onScrollbar = hasScrollbar() && inViewport && mouseX >= x + w - 7;
+            boolean onScrollbar = hasScrollbar() && inViewport && mouseX >= trackX - 1;
             int effMouseX = (inViewport && !onScrollbar && !this.draggingScrollbar) ? mouseX : -10000;
             int effMouseY = (inViewport && !onScrollbar && !this.draggingScrollbar) ? mouseY : -10000;
 
@@ -450,24 +692,25 @@ public final class BurrowUi {
             }
             g.disableScissor();
 
-            // Crisp right-edge scrollbar track & thumb
+            // Authentic 6px vanilla Minecraft scrollbar (widget/scroller_background + widget/scroller)
             if (hasScrollbar()) {
-                int trackX = x + w - 5;
-                int trackY = y + 3;
-                int trackH = Math.max(12, h - 6);
-                g.fill(trackX, trackY, trackX + 3, trackY + trackH, 0x550A0A0E);
+                int trackY = y + 2;
+                int trackH = Math.max(16, h - 4);
+                BurrowVanillaSprites.draw(g, BurrowVanillaSprites.SCROLLER_BG, trackX, trackY, SCROLLBAR_W, trackH);
 
-                int thumbH = Math.max(16, (int) Math.round((double) h * trackH / (h + this.maxScroll)));
+                int thumbH = Math.max(20, (int) Math.round((double) h * trackH / (h + this.maxScroll)));
                 thumbH = Math.min(trackH, thumbH);
                 int maxThumbTravel = Math.max(1, trackH - thumbH);
                 int thumbY = trackY + (int) Math.round((this.visualScroll / this.maxScroll) * maxThumbTravel);
 
+                BurrowVanillaSprites.draw(g, BurrowVanillaSprites.SCROLLER, trackX, thumbY, SCROLLBAR_W, thumbH);
                 boolean hoverThumb = this.draggingScrollbar
-                        || (mouseX >= trackX - 2 && mouseX <= trackX + 5 && mouseY >= thumbY && mouseY <= thumbY + thumbH);
-                int thumbColor = this.draggingScrollbar
-                        ? 0xFF9898B0
-                        : (hoverThumb ? 0xFF7A7A90 : 0xFF565668);
-                g.fill(trackX, thumbY, trackX + 3, thumbY + thumbH, thumbColor);
+                        || (mouseX >= trackX - 1 && mouseX <= trackX + SCROLLBAR_W + 1
+                        && mouseY >= thumbY && mouseY <= thumbY + thumbH);
+                if (hoverThumb) {
+                    g.fill(trackX, thumbY, trackX + SCROLLBAR_W, thumbY + thumbH,
+                            this.draggingScrollbar ? 0x30FFFFFF : 0x1CFFFFFF);
+                }
             }
         }
 
@@ -490,12 +733,13 @@ public final class BurrowUi {
             int y = getY();
             int w = getWidth();
             int h = getHeight();
+            int trackX = x + w - SCROLLBAR_W - 1;
 
             // Scrollbar click/drag
-            if (hasScrollbar() && event.button() == 0 && event.x() >= x + w - 8) {
-                int trackY = y + 3;
-                int trackH = Math.max(12, h - 6);
-                int thumbH = Math.max(16, (int) Math.round((double) h * trackH / (h + this.maxScroll)));
+            if (hasScrollbar() && event.button() == 0 && event.x() >= trackX - 1) {
+                int trackY = y + 2;
+                int trackH = Math.max(16, h - 4);
+                int thumbH = Math.max(20, (int) Math.round((double) h * trackH / (h + this.maxScroll)));
                 thumbH = Math.min(trackH, thumbH);
                 int maxThumbTravel = Math.max(1, trackH - thumbH);
                 int thumbY = trackY + (int) Math.round((this.visualScroll / this.maxScroll) * maxThumbTravel);
@@ -528,8 +772,8 @@ public final class BurrowUi {
         public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
             if (this.draggingScrollbar && hasScrollbar()) {
                 int h = getHeight();
-                int trackH = Math.max(12, h - 6);
-                int thumbH = Math.max(16, (int) Math.round((double) h * trackH / (h + this.maxScroll)));
+                int trackH = Math.max(16, h - 4);
+                int thumbH = Math.max(20, (int) Math.round((double) h * trackH / (h + this.maxScroll)));
                 thumbH = Math.min(trackH, thumbH);
                 int maxThumbTravel = Math.max(1, trackH - thumbH);
                 double deltaScroll = ((event.y() - this.dragStartY) / maxThumbTravel) * this.maxScroll;
@@ -560,6 +804,183 @@ public final class BurrowUi {
 
         @Override
         protected void updateWidgetNarration(NarrationElementOutput output) {
+        }
+    }
+
+    /** Crisp muted Burrow version label drawn in the bottom-right corner of Burrow screens. */
+    public static void drawVersionFooter(GuiGraphicsExtractor g, int screenW, int screenH) {
+        Font font = font();
+        String label = "Burrow v" + BurrowClient.modVersion();
+        int x = screenW - font.width(label) - 6;
+        int y = screenH - 12;
+        g.text(font, label, x, y, TEXT_MUTED, true);
+    }
+
+    /** Vertical pixels reserved inside the top of the Friends/Host inset box for an update notice banner (0 if none). */
+    public static int updateBannerReservedHeight() {
+        UpdateChecker.UpdateInfo info = UpdateChecker.info();
+        if (!info.isAvailable()) {
+            return 0;
+        }
+        if (info.isBreaking()) {
+            return 38;
+        }
+        return UpdateChecker.isCompatibleBannerDismissed() ? 0 : 24;
+    }
+
+    /** Adds clickable Update / Dismiss buttons for the active update notice banner, if any. */
+    public static void addUpdateBannerWidgets(
+            int contentX,
+            int contentY,
+            int contentW,
+            java.util.function.Consumer<AbstractWidget> addWidget
+    ) {
+        UpdateChecker.UpdateInfo info = UpdateChecker.info();
+        if (!info.isAvailable()) {
+            return;
+        }
+        int bx = contentX + 4;
+        int by = contentY + 4;
+        int bw = contentW - 8;
+        if (info.isBreaking()) {
+            int btnW = 58;
+            VanillaButton updateBtn = button(
+                    Component.literal("Update").withColor(0xFFFFD866),
+                    bx + bw - btnW - 5, by + 8, btnW, 18,
+                    UpdateChecker::openDownloadPage);
+            updateBtn.setTooltip(Tooltip.create(Component.literal(
+                    "Open Burrow v" + info.latestVersion() + " download page")));
+            addWidget.accept(updateBtn);
+        } else if (!UpdateChecker.isCompatibleBannerDismissed()) {
+            int dismissW = 16;
+            int dlW = 54;
+            VanillaButton dlBtn = button(
+                    Component.literal("Download").withColor(0xFF7CC8FF),
+                    bx + bw - dismissW - dlW - 7, by + 2, dlW, 16,
+                    UpdateChecker::openDownloadPage);
+            dlBtn.setTooltip(Tooltip.create(Component.literal(
+                    "Open Burrow v" + info.latestVersion() + " download page")));
+            addWidget.accept(dlBtn);
+
+            VanillaButton dismissBtn = button(
+                    Component.literal("x").withColor(TEXT_SECONDARY),
+                    bx + bw - dismissW - 3, by + 2, dismissW, 16,
+                    UpdateChecker::dismissCompatibleBanner);
+            dismissBtn.setTooltip(Tooltip.create(Component.literal("Dismiss for this session")));
+            addWidget.accept(dismissBtn);
+        }
+    }
+
+    /** Draws either the slim compatible-update bar (0.5.X) or the prominent breaking-update banner (0.X.0 / X.0.0). */
+    public static void drawUpdateBanner(GuiGraphicsExtractor g, int contentX, int contentY, int contentW) {
+        UpdateChecker.UpdateInfo info = UpdateChecker.info();
+        if (!info.isAvailable()) {
+            return;
+        }
+        Font font = font();
+        int bx = contentX + 4;
+        int by = contentY + 4;
+        int bw = contentW - 8;
+
+        if (info.isBreaking()) {
+            int bh = 34;
+            g.fill(bx, by, bx + bw, by + bh, 0xFF34181E);
+            g.outline(bx, by, bw, bh, 0xFFC84B5B);
+            g.fill(bx + 1, by + 1, bx + 4, by + bh - 1, DOT_DND);
+
+            String title = "! Major Update Available: v" + info.latestVersion();
+            String sub = "Installed v" + info.currentVersion() + " may not work with the server";
+            int maxW = bw - 74;
+            g.text(font, BurrowFriendsScreen.ellipsize(font, title, maxW), bx + 9, by + 6, 0xFFFF98A2, true);
+            g.text(font, BurrowFriendsScreen.ellipsize(font, sub, maxW), bx + 9, by + 19, 0xFFE6CFD3, false);
+        } else if (!UpdateChecker.isCompatibleBannerDismissed()) {
+            int bh = 20;
+            g.fill(bx, by, bx + bw, by + bh, 0xFF1A2633);
+            g.outline(bx, by, bw, bh, 0xFF3B6691);
+            g.fill(bx + 1, by + 1, bx + 3, by + bh - 1, DOT_NOTIFY);
+
+            String msg = "Update available: v" + info.latestVersion() + " (compatible)";
+            int maxW = bw - 86;
+            g.text(font, BurrowFriendsScreen.ellipsize(font, msg, maxW), bx + 8, by + 6, 0xFFD4ECFF, false);
+        }
+    }
+
+    /**
+     * Prominent once-per-session popup modal shown when a breaking Burrow update
+     * ({@code 0.X.0} or {@code X.0.0}) is available.
+     */
+    public static final class BreakingUpdateScreen extends Screen {
+        private static final int MODAL_W = 304;
+        private static final int MODAL_H = 128;
+
+        private final Screen parent;
+        private final UpdateChecker.UpdateInfo info;
+        private int modalX;
+        private int modalY;
+
+        public BreakingUpdateScreen(Screen parent, UpdateChecker.UpdateInfo info) {
+            super(Component.literal("Major Burrow Update Available"));
+            this.parent = parent;
+            this.info = info;
+        }
+
+        @Override
+        protected void init() {
+            this.modalX = (this.width - MODAL_W) / 2;
+            this.modalY = Math.max(4, (this.height - MODAL_H) / 2);
+
+            int btnY = this.modalY + MODAL_H - 30;
+            int innerX = this.modalX + PAD;
+            int innerW = MODAL_W - PAD * 2;
+            int dlW = 148;
+            int contW = innerW - dlW - 6;
+
+            addRenderableWidget(button(
+                    Component.literal("Download v" + this.info.latestVersion()).withColor(0xFF7AE89B),
+                    innerX, btnY, dlW, 20,
+                    UpdateChecker::openDownloadPage));
+
+            addRenderableWidget(button("Continue Anyway", innerX + dlW + 6, btnY, contW, 20, this::onClose));
+        }
+
+        @Override
+        public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+            super.extractBackground(g, mouseX, mouseY, partialTick);
+            drawModalPanel(g, this.modalX, this.modalY, MODAL_W, MODAL_H);
+
+            Font font = font();
+            int innerX = this.modalX + PAD;
+            int innerW = MODAL_W - PAD * 2;
+
+            g.text(font, "! Major Burrow Update Available", innerX, this.modalY + 13, 0xFFFF909C, true);
+
+            int boxY = this.modalY + 28;
+            int boxH = 62;
+            g.fill(innerX, boxY, innerX + innerW, boxY + boxH, 0xFF28161B);
+            g.outline(innerX, boxY, innerW, boxH, 0xFFA6404E);
+            g.fill(innerX + 1, boxY + 1, innerX + 4, boxY + boxH - 1, DOT_DND);
+
+            g.text(font,
+                    "Installed: v" + this.info.currentVersion() + "   ->   Latest: v" + this.info.latestVersion(),
+                    innerX + 10, boxY + 9, 0xFFFFD866, true);
+            g.text(font,
+                    "This is a breaking update with protocol or feature",
+                    innerX + 10, boxY + 25, TEXT_PRIMARY, false);
+            g.text(font,
+                    "changes. Older versions may fail to connect or join.",
+                    innerX + 10, boxY + 37, TEXT_PRIMARY, false);
+            g.text(font,
+                    "Download the latest jar and restart Minecraft.",
+                    innerX + 10, boxY + 49, TEXT_SECONDARY, false);
+
+            drawVersionFooter(g, this.width, this.height);
+        }
+
+        @Override
+        public void onClose() {
+            if (this.minecraft != null) {
+                this.minecraft.gui.setScreen(this.parent);
+            }
         }
     }
 }

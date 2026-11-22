@@ -9,11 +9,11 @@ import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.session.JoinFlow;
 import dev.meeyah.burrow.state.ActivityTracker;
 import dev.meeyah.burrow.state.FriendsState;
+import dev.meeyah.burrow.state.UpdateChecker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
@@ -55,6 +55,7 @@ public class BurrowFriendsScreen extends Screen {
 
     private final @Nullable Screen parent;
     private final FriendsState.Listener listener = this::onFriendsChanged;
+    private final Runnable updateListener = this::onFriendsChanged;
     private Tab tab = Tab.FRIENDS;
     private @Nullable UUID expandedFriend = null;
     private double scrollFriends = 0.0;
@@ -69,6 +70,7 @@ public class BurrowFriendsScreen extends Screen {
     private int contentX;
     private int contentY;
     private int contentW;
+    private int updateBannerH = 0;
     private @Nullable String emptyMessage;
 
     private record CardDisplay(
@@ -148,10 +150,10 @@ public class BurrowFriendsScreen extends Screen {
         BurrowConnection.Status connStatus = conn == null ? BurrowConnection.Status.OFFLINE : conn.status();
         this.lastConnectionStatus = connStatus;
         if (conn != null && (connStatus == BurrowConnection.Status.ERROR || connStatus == BurrowConnection.Status.OFFLINE)) {
-            addRenderableWidget(Button.builder(Component.literal("Retry"), b -> {
+            addRenderableWidget(BurrowUi.button("Retry", rpcX - 4 - 46, this.panelY + BurrowUi.HEADER_TITLE_Y, 46, 20, () -> {
                 conn.reconnectNow();
                 rebuildWidgets();
-            }).bounds(rpcX - 4 - 46, this.panelY + BurrowUi.HEADER_TITLE_Y, 46, 20).build());
+            }));
         }
 
         // ----- Tab Data & Counts -----
@@ -197,6 +199,10 @@ public class BurrowFriendsScreen extends Screen {
                 this.tab == Tab.WORLDS,
                 () -> switchTab(Tab.WORLDS)));
 
+        // ----- Optional Update Notice Banner -----
+        this.updateBannerH = BurrowUi.updateBannerReservedHeight();
+        BurrowUi.addUpdateBannerWidgets(this.contentX, this.contentY, this.contentW, this::addRenderableWidget);
+
         // ----- Active Tab Body -----
         switch (this.tab) {
             case FRIENDS -> initFriendsTab(friends);
@@ -214,24 +220,23 @@ public class BurrowFriendsScreen extends Screen {
                 ? Component.literal("Add / Requests (" + incomingCount + ")").withColor(BurrowUi.DOT_NOTIFY)
                 : Component.literal("Add / Requests");
         int reqBtnW = incomingCount > 0 ? 116 : 96;
-        addRenderableWidget(Button.builder(reqLabel, b -> {
+        addRenderableWidget(BurrowUi.button(reqLabel, this.contentX, footerY, reqBtnW, 20, () -> {
             if (this.minecraft != null) {
                 this.minecraft.gui.setScreen(new FriendRequestsScreen(this));
             }
-        }).bounds(this.contentX, footerY, reqBtnW, 20).build());
+        }));
 
         if (mc != null && mc.getSingleplayerServer() != null) {
             boolean hosting = HostSession.isHosting();
-            addRenderableWidget(Button.builder(
-                            Component.literal(hosting ? "Host Settings" : "Host World"),
-                            b -> mc.gui.setScreen(new HostWorldScreen(this)))
-                    .bounds(this.contentX + reqBtnW + 4, footerY, 92, 20).build());
+            addRenderableWidget(BurrowUi.button(
+                    hosting ? "Host Settings" : "Host World",
+                    this.contentX + reqBtnW + 4, footerY, 92, 20,
+                    () -> mc.gui.setScreen(new HostWorldScreen(this))));
         } else {
             HostSession.ensureStopped();
         }
 
-        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
-                .bounds(this.contentX + this.contentW - 84, footerY, 84, 20).build());
+        addRenderableWidget(BurrowUi.button("Done", this.contentX + this.contentW - 84, footerY, 84, 20, this::onClose));
     }
 
     private void initFriendsTab(List<FriendsState.Friend> friends) {
@@ -248,15 +253,15 @@ public class BurrowFriendsScreen extends Screen {
 
         BurrowConfig cfg = BurrowClient.config();
         int viewX = this.contentX + 2;
-        int viewY = this.contentY + 2;
+        int viewY = this.contentY + 2 + this.updateBannerH;
         int viewW = this.contentW - 4;
-        int viewH = CONTENT_H - 4;
+        int viewH = CONTENT_H - 4 - this.updateBannerH;
 
         BurrowUi.ScrollContainer scroller = new BurrowUi.ScrollContainer(
                 viewX, viewY, viewW, viewH, this.scrollFriends, v -> this.scrollFriends = v);
 
         int innerX = this.contentX + 6;
-        int innerW = this.contentW - 15;
+        int innerW = this.contentW - 18;
         int y = viewY + 4;
 
         for (FriendsState.Friend f : friends) {
@@ -315,10 +320,10 @@ public class BurrowFriendsScreen extends Screen {
             boolean mismatch = f.hosting() && f.isVersionMismatch();
             boolean vfpOk = mismatch && ViaFabricPlusCompat.canTranslate(f.gameVersion());
             boolean blockedByVersion = mismatch && !vfpOk;
-            Button acceptBtn = Button.builder(
-                            Component.literal("Accept Invite").withColor(blockedByVersion ? BurrowUi.TEXT_MUTED : 0xFF7AE89B),
-                            b -> JoinFlow.beginByHostUuid(worldInv.host()))
-                    .bounds(curX, btnY, 86, 18).build();
+            BurrowUi.VanillaButton acceptBtn = BurrowUi.button(
+                    Component.literal("Accept Invite").withColor(blockedByVersion ? BurrowUi.TEXT_MUTED : 0xFF7AE89B),
+                    curX, btnY, 86, 18,
+                    () -> JoinFlow.beginByHostUuid(worldInv.host()));
             if (blockedByVersion) {
                 acceptBtn.active = false;
                 acceptBtn.setTooltip(Tooltip.create(Component.literal(
@@ -330,20 +335,20 @@ public class BurrowFriendsScreen extends Screen {
             scroller.addChild(acceptBtn);
             curX += 86 + gap;
 
-            scroller.addChild(Button.builder(Component.literal("Decline"), b -> {
+            scroller.addChild(BurrowUi.button("Decline", curX, btnY, 54, 18, () -> {
                 BurrowClient.friends().dismissInvite(worldInv.host());
                 rebuildWidgets();
-            }).bounds(curX, btnY, 54, 18).build());
+            }));
         }
         // 2. Incoming invite request from this friend -> Invite to World (auto-hosts!) + Dismiss
         else if (requestedInvite) {
-            Button inviteBtn = Button.builder(
-                            Component.literal("Invite to World").withColor(inSingleplayer ? 0xFF7AE89B : BurrowUi.TEXT_MUTED),
-                            b -> {
-                                HostSession.inviteFriend(f.uuid());
-                                rebuildWidgets();
-                            })
-                    .bounds(curX, btnY, 96, 18).build();
+            BurrowUi.VanillaButton inviteBtn = BurrowUi.button(
+                    Component.literal("Invite to World").withColor(inSingleplayer ? 0xFF7AE89B : BurrowUi.TEXT_MUTED),
+                    curX, btnY, 96, 18,
+                    () -> {
+                        HostSession.inviteFriend(f.uuid());
+                        rebuildWidgets();
+                    });
             if (!inSingleplayer) {
                 inviteBtn.active = false;
                 inviteBtn.setTooltip(Tooltip.create(Component.literal("Enter a singleplayer world to invite friends.")));
@@ -351,10 +356,10 @@ public class BurrowFriendsScreen extends Screen {
             scroller.addChild(inviteBtn);
             curX += 96 + gap;
 
-            scroller.addChild(Button.builder(Component.literal("Dismiss"), b -> {
+            scroller.addChild(BurrowUi.button("Dismiss", curX, btnY, 54, 18, () -> {
                 BurrowClient.friends().dismissInviteRequest(f.uuid());
                 rebuildWidgets();
-            }).bounds(curX, btnY, 54, 18).build());
+            }));
         }
         // 3. Normal context actions
         else if (f.isOnline()) {
@@ -362,10 +367,10 @@ public class BurrowFriendsScreen extends Screen {
                 boolean mismatch = f.isVersionMismatch();
                 boolean vfpOk = mismatch && ViaFabricPlusCompat.canTranslate(f.gameVersion());
                 boolean canJoin = !f.locked() && (!mismatch || vfpOk);
-                Button joinBtn = Button.builder(
-                                Component.literal("Join World").withColor(canJoin ? 0xFF7AE89B : BurrowUi.TEXT_MUTED),
-                                b -> JoinFlow.begin(f))
-                        .bounds(curX, btnY, 76, 18).build();
+                BurrowUi.VanillaButton joinBtn = BurrowUi.button(
+                        Component.literal("Join World").withColor(canJoin ? 0xFF7AE89B : BurrowUi.TEXT_MUTED),
+                        curX, btnY, 76, 18,
+                        () -> JoinFlow.begin(f));
                 if (!canJoin) {
                     joinBtn.active = false;
                     String reason = f.locked()
@@ -381,10 +386,10 @@ public class BurrowFriendsScreen extends Screen {
 
                 addInviteButton(scroller, f, inSingleplayer, curX, btnY);
             } else if (f.hasJoinableServer()) {
-                scroller.addChild(Button.builder(
-                                Component.literal("Join Server").withColor(0xFF7CC8FF),
-                                b -> JoinFlow.joinExternalServer(f.serverName(), f.serverIp()))
-                        .bounds(curX, btnY, 78, 18).build());
+                scroller.addChild(BurrowUi.button(
+                        Component.literal("Join Server").withColor(0xFF7CC8FF),
+                        curX, btnY, 78, 18,
+                        () -> JoinFlow.joinExternalServer(f.serverName(), f.serverIp())));
                 curX += 78 + gap;
 
                 addInviteButton(scroller, f, inSingleplayer, curX, btnY);
@@ -393,16 +398,16 @@ public class BurrowFriendsScreen extends Screen {
                 addInviteButton(scroller, f, inSingleplayer, curX, btnY);
                 curX += 54 + gap;
 
-                Button reqBtn = Button.builder(
-                                Component.literal("Request Invite"),
-                                b -> {
-                                    if (BurrowClient.connection() != null && f.uuid() != null) {
-                                        BurrowClient.connection().requestInvite(f.uuid());
-                                    }
-                                    b.active = false;
-                                    b.setMessage(Component.literal("Requested"));
-                                })
-                        .bounds(curX, btnY, 92, 18).build();
+                BurrowUi.VanillaButton reqBtn = BurrowUi.button(
+                        Component.literal("Request Invite"),
+                        curX, btnY, 92, 18,
+                        b -> {
+                            if (BurrowClient.connection() != null && f.uuid() != null) {
+                                BurrowClient.connection().requestInvite(f.uuid());
+                            }
+                            b.active = false;
+                            b.setMessage(Component.literal("Requested"));
+                        });
                 if (!f.isInGame()) {
                     reqBtn.active = false;
                     reqBtn.setTooltip(Tooltip.create(Component.literal("Not in a world right now.")));
@@ -413,14 +418,14 @@ public class BurrowFriendsScreen extends Screen {
 
         // Right-aligned Remove Friend button
         int remW = 54;
-        scroller.addChild(Button.builder(
-                        Component.literal("Remove").withColor(0xFFFF8A8A),
-                        b -> {
-                            if (this.minecraft != null) {
-                                this.minecraft.gui.setScreen(new RemoveFriendScreen(this, f));
-                            }
-                        })
-                .bounds(x + w - remW - 6, btnY, remW, 18).build());
+        scroller.addChild(BurrowUi.button(
+                Component.literal("Remove").withColor(0xFFFF8A8A),
+                x + w - remW - 6, btnY, remW, 18,
+                () -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.gui.setScreen(new RemoveFriendScreen(this, f));
+                    }
+                }));
     }
 
     private void addInviteButton(
@@ -430,15 +435,15 @@ public class BurrowFriendsScreen extends Screen {
             int x,
             int y
     ) {
-        Button inviteBtn = Button.builder(
-                        Component.literal("Invite"),
-                        b -> {
-                            if (HostSession.inviteFriend(f.uuid())) {
-                                b.active = false;
-                                b.setMessage(Component.literal("Invited"));
-                            }
-                        })
-                .bounds(x, y, 54, 18).build();
+        BurrowUi.VanillaButton inviteBtn = BurrowUi.button(
+                Component.literal("Invite"),
+                x, y, 54, 18,
+                b -> {
+                    if (HostSession.inviteFriend(f.uuid())) {
+                        b.active = false;
+                        b.setMessage(Component.literal("Invited"));
+                    }
+                });
         if (!inSingleplayer) {
             inviteBtn.active = false;
             inviteBtn.setTooltip(Tooltip.create(Component.literal("Enter a singleplayer world to invite friends.")));
@@ -496,9 +501,9 @@ public class BurrowFriendsScreen extends Screen {
         // Actually keeping chronological most-recent-first order matches "most recent 50 players you saw".
 
         int viewX = this.contentX + 2;
-        int viewY = this.contentY + 2;
+        int viewY = this.contentY + 2 + this.updateBannerH;
         int viewW = this.contentW - 4;
-        int viewH = CONTENT_H - 4;
+        int viewH = CONTENT_H - 4 - this.updateBannerH;
 
         BurrowUi.ScrollContainer scroller = new BurrowUi.ScrollContainer(
                 viewX, viewY, viewW, viewH, this.scrollPlayers, v -> this.scrollPlayers = v);
@@ -508,7 +513,7 @@ public class BurrowFriendsScreen extends Screen {
         List<FriendsState.Request> reqs = fs.requests();
 
         int innerX = this.contentX + 6;
-        int innerW = this.contentW - 15;
+        int innerW = this.contentW - 18;
         int y = viewY + 4;
 
         if (!live.isEmpty()) {
@@ -533,8 +538,9 @@ public class BurrowFriendsScreen extends Screen {
         }
 
         scroller.setBackgroundRenderer((g, mx, my, scrollPx) -> {
+            Font font = BurrowUi.font();
             for (SectionLabel sec : sections) {
-                g.text(this.font, sec.text(), sec.x(), sec.y() - scrollPx, BurrowUi.TEXT_MUTED, false);
+                g.text(font, sec.text(), sec.x(), sec.y() - scrollPx, BurrowUi.TEXT_MUTED, false);
             }
             drawCardDisplays(g, cards, scrollPx);
         });
@@ -598,33 +604,36 @@ public class BurrowFriendsScreen extends Screen {
                             rebuildWidgets();
                         }));
             }
-            Button b = Button.builder(Component.literal("Friends"), btn -> {})
-                    .bounds(btnX, y + 6, btnW, 18).build();
+            BurrowUi.VanillaButton b = BurrowUi.button("Friends", btnX, y + 6, btnW, 18, () -> {});
             b.active = false;
             scroller.addChild(b);
         } else if (matchingReq != null && !matchingReq.outgoing()) {
             UUID reqUuid = matchingReq.uuid();
-            scroller.addChild(Button.builder(Component.literal("Accept").withColor(0xFF7AE89B), btn -> {
-                if (BurrowClient.connection() != null && reqUuid != null) {
-                    BurrowClient.connection().acceptRequest(reqUuid);
-                }
-            }).bounds(btnX, y + 6, btnW, 18).build());
+            scroller.addChild(BurrowUi.button(
+                    Component.literal("Accept").withColor(0xFF7AE89B),
+                    btnX, y + 6, btnW, 18,
+                    () -> {
+                        if (BurrowClient.connection() != null && reqUuid != null) {
+                            BurrowClient.connection().acceptRequest(reqUuid);
+                        }
+                    }));
         } else if (matchingReq != null) {
-            Button b = Button.builder(Component.literal("Pending"), btn -> {})
-                    .bounds(btnX, y + 6, btnW, 18).build();
+            BurrowUi.VanillaButton b = BurrowUi.button("Pending", btnX, y + 6, btnW, 18, () -> {});
             b.active = false;
             scroller.addChild(b);
         } else if (hasMod) {
-            scroller.addChild(Button.builder(Component.literal("+ Add").withColor(0xFF7AE89B), btn -> {
-                if (BurrowClient.connection() != null) {
-                    BurrowClient.connection().addFriend(name);
-                }
-                btn.active = false;
-                btn.setMessage(Component.literal("Sent"));
-            }).bounds(btnX, y + 6, btnW, 18).build());
+            scroller.addChild(BurrowUi.button(
+                    Component.literal("+ Add").withColor(0xFF7AE89B),
+                    btnX, y + 6, btnW, 18,
+                    btn -> {
+                        if (BurrowClient.connection() != null) {
+                            BurrowClient.connection().addFriend(name);
+                        }
+                        btn.active = false;
+                        btn.setMessage(Component.literal("Sent"));
+                    }));
         } else {
-            Button b = Button.builder(Component.literal("No Mod"), btn -> {})
-                    .bounds(btnX, y + 6, btnW, 18).build();
+            BurrowUi.VanillaButton b = BurrowUi.button("No Mod", btnX, y + 6, btnW, 18, () -> {});
             b.active = false;
             b.setTooltip(Tooltip.create(Component.literal("This player doesn't have Burrow installed yet.")));
             scroller.addChild(b);
@@ -742,16 +751,16 @@ public class BurrowFriendsScreen extends Screen {
         }
 
         int viewX = this.contentX + 2;
-        int viewY = this.contentY + 2;
+        int viewY = this.contentY + 2 + this.updateBannerH;
         int viewW = this.contentW - 4;
-        int viewH = CONTENT_H - 4;
+        int viewH = CONTENT_H - 4 - this.updateBannerH;
 
         BurrowUi.ScrollContainer scroller = new BurrowUi.ScrollContainer(
                 viewX, viewY, viewW, viewH, this.scrollWorlds, v -> this.scrollWorlds = v);
 
         List<CardDisplay> cards = new ArrayList<>();
         int innerX = this.contentX + 6;
-        int innerW = this.contentW - 15;
+        int innerW = this.contentW - 18;
         int y = viewY + 4;
 
         for (WorldEntry item : items) {
@@ -760,11 +769,11 @@ public class BurrowFriendsScreen extends Screen {
                     item.badge(), item.badgeColor(), false,
                     innerX, y, innerW, 30));
             boolean canJoin = !item.locked() && (!item.versionMismatch() || item.vfpCompatible());
-            Button joinBtn = Button.builder(
-                            Component.literal(item.locked() ? "Locked" : "Join")
-                                    .withColor(canJoin ? 0xFF7AE89B : BurrowUi.TEXT_MUTED),
-                            b -> JoinFlow.beginByHostUuid(item.host()))
-                    .bounds(innerX + innerW - 56, y + 6, 50, 18).build();
+            BurrowUi.VanillaButton joinBtn = BurrowUi.button(
+                    Component.literal(item.locked() ? "Locked" : "Join")
+                            .withColor(canJoin ? 0xFF7AE89B : BurrowUi.TEXT_MUTED),
+                    innerX + innerW - 56, y + 6, 50, 18,
+                    () -> JoinFlow.beginByHostUuid(item.host()));
             joinBtn.active = canJoin;
             if (item.versionMismatch() && !item.vfpCompatible()) {
                 joinBtn.setTooltip(Tooltip.create(Component.literal(
@@ -783,6 +792,7 @@ public class BurrowFriendsScreen extends Screen {
     }
 
     private void drawCardDisplays(GuiGraphicsExtractor g, List<CardDisplay> cards, int scrollPx) {
+        Font font = BurrowUi.font();
         for (CardDisplay c : cards) {
             int cy = c.y() - scrollPx;
             if (cy + c.h() < this.contentY || cy > this.contentY + CONTENT_H) {
@@ -798,13 +808,13 @@ public class BurrowFriendsScreen extends Screen {
                 g.fill(c.x() + 5, cy + 5, c.x() + 25, cy + 25, 0x88141418);
             }
             int textX = c.x() + 31;
-            g.text(this.font, c.name(), textX, cy + 5, nameColor, !c.muted());
+            g.text(font, c.name(), textX, cy + 5, nameColor, !c.muted());
             if (c.badge() != null && !c.badge().isEmpty()) {
-                int nameW = this.font.width(c.name());
-                BurrowUi.drawTagPill(g, this.font, textX + nameW + 5, cy + 4, c.badge(), c.badgeColor());
+                int nameW = font.width(c.name());
+                BurrowUi.drawTagPill(g, font, textX + nameW + 5, cy + 4, c.badge(), c.badgeColor());
             }
             int maxSubW = c.w() - 108;
-            g.text(this.font, ellipsize(this.font, c.subtitle(), maxSubW),
+            g.text(font, ellipsize(font, c.subtitle(), maxSubW),
                     textX, cy + 17, subColor, false);
         }
     }
@@ -815,26 +825,32 @@ public class BurrowFriendsScreen extends Screen {
 
         BurrowUi.drawModalPanel(g, this.panelX, this.panelY, PANEL_W, PANEL_H);
 
-        g.text(this.font, "Friends", this.contentX, this.panelY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
+        Font font = BurrowUi.font();
+        g.text(font, "Friends", this.contentX, this.panelY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
         String flash = BurrowClient.friends().errorFlash();
         this.showingErrorFlash = (flash != null);
         if (flash != null) {
             int maxFlashW = (this.lastConnectionStatus == BurrowConnection.Status.ERROR
                     || this.lastConnectionStatus == BurrowConnection.Status.OFFLINE) ? 228 : 276;
-            g.text(this.font, ellipsize(this.font, "! " + flash, maxFlashW),
+            g.text(font, ellipsize(font, "! " + flash, maxFlashW),
                     this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, 0xFFFF9977, false);
         } else {
-            g.text(this.font, statusText(), this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
+            g.text(font, statusText(), this.contentX, this.panelY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
         }
 
         BurrowUi.drawInsetBox(g, this.contentX, this.contentY, this.contentW, CONTENT_H);
+        BurrowUi.drawUpdateBanner(g, this.contentX, this.contentY, this.contentW);
 
         if (this.emptyMessage != null) {
-            g.centeredText(this.font, this.emptyMessage,
+            int remTop = this.contentY + this.updateBannerH;
+            int remH = CONTENT_H - this.updateBannerH;
+            g.centeredText(font, this.emptyMessage,
                     this.contentX + this.contentW / 2,
-                    this.contentY + CONTENT_H / 2 - 4,
+                    remTop + remH / 2 - 4,
                     BurrowUi.TEXT_MUTED);
         }
+
+        BurrowUi.drawVersionFooter(g, this.width, this.height);
     }
 
     private List<FriendsState.Friend> sortedFriends() {
@@ -870,16 +886,23 @@ public class BurrowFriendsScreen extends Screen {
     @Override
     public void added() {
         BurrowClient.friends().addListener(this.listener);
+        UpdateChecker.addListener(this.updateListener);
     }
 
     @Override
     public void removed() {
         BurrowClient.friends().removeListener(this.listener);
+        UpdateChecker.removeListener(this.updateListener);
     }
 
     @Override
     public void tick() {
         super.tick();
+        if (this.minecraft != null && UpdateChecker.shouldShowBreakingModal()) {
+            UpdateChecker.markBreakingModalShown();
+            this.minecraft.gui.setScreen(new BurrowUi.BreakingUpdateScreen(this, UpdateChecker.info()));
+            return;
+        }
         BurrowClient.friends().pruneExpired();
         BurrowConnection conn = BurrowClient.connection();
         BurrowConnection.Status currentStatus = conn == null ? BurrowConnection.Status.OFFLINE : conn.status();
@@ -987,7 +1010,7 @@ public class BurrowFriendsScreen extends Screen {
             g.fill(x + 20, y + 20, x + 26, y + 26, 0xFF0E0E12);
             g.fill(x + 21, y + 21, x + 25, y + 25, dotColor);
 
-            Font font = Minecraft.getInstance().font;
+            Font font = BurrowUi.font();
             int textX = x + 32;
             int nameColor = this.friend.isOnline() ? BurrowUi.TEXT_PRIMARY : BurrowUi.TEXT_SECONDARY;
             g.text(font, this.friend.name(), textX, y + 5, nameColor, true);
@@ -1093,15 +1116,16 @@ public class BurrowFriendsScreen extends Screen {
             int boxW = this.innerW - 16;
             int insetTop = this.modalY + INSET_TOP;
             int sendW = 54;
+            int fieldW = boxW - sendW - 4;
 
-            this.nameBox = new EditBox(this.font, boxX, insetTop + 8, boxW - sendW - 4, 18,
+            this.nameBox = new EditBox(BurrowUi.font(), boxX + 4, insetTop + 13, fieldW - 8, 10,
                     Component.literal("Add friend"));
+            this.nameBox.setBordered(false);
             this.nameBox.setMaxLength(32);
             this.nameBox.setHint(Component.literal("Enter username..."));
             this.nameBox.setValue(this.typedName);
             addRenderableWidget(this.nameBox);
-            addRenderableWidget(Button.builder(Component.literal("Send"), b -> sendRequest())
-                    .bounds(boxX + boxW - sendW, insetTop + 7, sendW, 20).build());
+            addRenderableWidget(BurrowUi.button("Send", boxX + boxW - sendW, insetTop + 7, sendW, 20, this::sendRequest));
             setInitialFocus(this.nameBox);
 
             List<FriendsState.Request> requests = BurrowClient.friends().requests();
@@ -1118,74 +1142,108 @@ public class BurrowFriendsScreen extends Screen {
                 List<RequestRowDisplay> rows = new ArrayList<>();
 
                 int rowX = this.innerX + 6;
-                int rowW = this.innerW - 15;
+                int rowW = this.innerW - 18;
                 int y = viewY + 2;
                 for (FriendsState.Request r : requests) {
                     if (r.outgoing()) {
                         rows.add(new RequestRowDisplay(r.uuid(), r.name(), "Outgoing request",
                                 rowX, y, rowW, 28));
-                        scroller.addChild(Button.builder(Component.literal("Cancel"), b -> {
+                        scroller.addChild(BurrowUi.button("Cancel", rowX + rowW - 58, y + 5, 52, 18, () -> {
                             if (BurrowClient.connection() != null) {
                                 BurrowClient.connection().declineRequest(r.uuid());
                             }
-                        }).bounds(rowX + rowW - 58, y + 5, 52, 18).build());
+                        }));
                     } else {
                         rows.add(new RequestRowDisplay(r.uuid(), r.name(), "Incoming request",
                                 rowX, y, rowW, 28));
-                        scroller.addChild(Button.builder(Component.literal("Accept").withColor(0xFF7AE89B), b -> {
-                            if (BurrowClient.connection() != null) {
-                                BurrowClient.connection().acceptRequest(r.uuid());
-                            }
-                        }).bounds(rowX + rowW - 110, y + 5, 50, 18).build());
-                        scroller.addChild(Button.builder(Component.literal("Decline").withColor(0xFFFF8A8A), b -> {
-                            if (BurrowClient.connection() != null) {
-                                BurrowClient.connection().declineRequest(r.uuid());
-                            }
-                        }).bounds(rowX + rowW - 56, y + 5, 50, 18).build());
+                        scroller.addChild(BurrowUi.button(
+                                Component.literal("Accept").withColor(0xFF7AE89B),
+                                rowX + rowW - 110, y + 5, 50, 18,
+                                () -> {
+                                    if (BurrowClient.connection() != null) {
+                                        BurrowClient.connection().acceptRequest(r.uuid());
+                                    }
+                                }));
+                        scroller.addChild(BurrowUi.button(
+                                Component.literal("Decline").withColor(0xFFFF8A8A),
+                                rowX + rowW - 56, y + 5, 50, 18,
+                                () -> {
+                                    if (BurrowClient.connection() != null) {
+                                        BurrowClient.connection().declineRequest(r.uuid());
+                                    }
+                                }));
                     }
                     y += 32;
                 }
 
                 scroller.setBackgroundRenderer((g, mx, my, scrollPx) -> {
+                    Font font = BurrowUi.font();
                     for (RequestRowDisplay c : rows) {
                         int cy = c.y() - scrollPx;
                         g.fill(c.x(), cy, c.x() + c.w(), cy + c.h(), BurrowUi.CARD_BG);
                         g.outline(c.x(), cy, c.w(), c.h(), BurrowUi.CARD_BORDER);
                         PlayerHeads.draw(g, c.uuid(), c.name(), c.x() + 5, cy + 4, 20);
-                        g.text(this.font, c.name(), c.x() + 31, cy + 5, BurrowUi.TEXT_PRIMARY, true);
-                        g.text(this.font, c.subtitle(), c.x() + 31, cy + 16, BurrowUi.TEXT_SECONDARY, false);
+                        g.text(font, c.name(), c.x() + 31, cy + 5, BurrowUi.TEXT_PRIMARY, true);
+                        g.text(font, c.subtitle(), c.x() + 31, cy + 16, BurrowUi.TEXT_SECONDARY, false);
                     }
                 });
                 scroller.setContentHeight(y - viewY + 2);
                 addRenderableWidget(scroller);
             }
 
-            addRenderableWidget(Button.builder(Component.literal("Back"), b -> onClose())
-                    .bounds(this.innerX + this.innerW - 84, this.modalY + BurrowUi.FOOTER_Y, 84, 20).build());
+            addRenderableWidget(BurrowUi.button("Back",
+                    this.innerX + this.innerW - 84, this.modalY + BurrowUi.FOOTER_Y, 84, 20, this::onClose));
         }
 
         @Override
         public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
             super.extractBackground(g, mouseX, mouseY, partialTick);
             BurrowUi.drawModalPanel(g, this.modalX, this.modalY, MODAL_W, MODAL_H);
-            g.text(this.font, "Add Friend & Requests", this.innerX, this.modalY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
+            Font font = BurrowUi.font();
+            g.text(font, "Add Friend & Requests", this.innerX, this.modalY + BurrowUi.HEADER_TITLE_Y, BurrowUi.TEXT_PRIMARY, true);
 
             String flash = BurrowClient.friends().errorFlash();
             this.showingFlash = (flash != null);
             if (flash != null) {
-                g.text(this.font, ellipsize(this.font, "! " + flash, this.innerW),
+                g.text(font, ellipsize(font, "! " + flash, this.innerW),
                         this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, 0xFFFF9977, false);
             } else {
-                g.text(this.font, "Add by username or manage pending requests",
+                g.text(font, "Add by username or manage pending requests",
                         this.innerX, this.modalY + BurrowUi.HEADER_SUB_Y, BurrowUi.TEXT_SECONDARY, false);
             }
 
             BurrowUi.drawInsetBox(g, this.innerX, this.modalY + INSET_TOP, this.innerW, INSET_H);
 
+            int boxX = this.innerX + 8;
+            int boxW = this.innerW - 16;
+            int fieldY = this.modalY + INSET_TOP + 8;
+            int fieldW = boxW - 54 - 4;
+            boolean fieldActive = (this.nameBox != null && this.nameBox.isFocused())
+                    || (mouseX >= boxX && mouseX < boxX + fieldW && mouseY >= fieldY && mouseY < fieldY + 18);
+            BurrowVanillaSprites.draw(
+                    g,
+                    fieldActive ? BurrowVanillaSprites.TEXT_FIELD_HOVER : BurrowVanillaSprites.TEXT_FIELD,
+                    boxX, fieldY, fieldW, 18);
+
             if (this.emptyMsg != null) {
-                g.centeredText(this.font, this.emptyMsg,
+                g.centeredText(font, this.emptyMsg,
                         this.modalX + MODAL_W / 2, this.modalY + INSET_TOP + 88, BurrowUi.TEXT_MUTED);
             }
+        }
+
+        @Override
+        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            int boxX = this.innerX + 8;
+            int fieldY = this.modalY + INSET_TOP + 8;
+            int fieldW = (this.innerW - 16) - 54 - 4;
+            if (this.nameBox != null
+                    && event.x() >= boxX && event.x() < boxX + fieldW
+                    && event.y() >= fieldY && event.y() < fieldY + 18) {
+                setFocused(this.nameBox);
+                this.nameBox.mouseClicked(event, doubleClick);
+                return true;
+            }
+            return super.mouseClicked(event, doubleClick);
         }
 
         @Override
@@ -1263,24 +1321,27 @@ public class BurrowFriendsScreen extends Screen {
             this.modalY = (this.height - MODAL_H) / 2;
 
             int btnY = this.modalY + MODAL_H - 30;
-            addRenderableWidget(Button.builder(Component.literal("Remove").withColor(0xFFFF8A8A), b -> {
-                if (BurrowClient.connection() != null && this.friend.uuid() != null) {
-                    BurrowClient.connection().removeFriend(this.friend.uuid());
-                }
-                onClose();
-            }).bounds(this.modalX + 10, btnY, 106, 20).build());
+            addRenderableWidget(BurrowUi.button(
+                    Component.literal("Remove").withColor(0xFFFF8A8A),
+                    this.modalX + 10, btnY, 106, 20,
+                    () -> {
+                        if (BurrowClient.connection() != null && this.friend.uuid() != null) {
+                            BurrowClient.connection().removeFriend(this.friend.uuid());
+                        }
+                        onClose();
+                    }));
 
-            addRenderableWidget(Button.builder(Component.literal("Cancel"), b -> onClose())
-                    .bounds(this.modalX + MODAL_W - 116, btnY, 106, 20).build());
+            addRenderableWidget(BurrowUi.button("Cancel", this.modalX + MODAL_W - 116, btnY, 106, 20, this::onClose));
         }
 
         @Override
         public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
             super.extractBackground(g, mouseX, mouseY, partialTick);
             BurrowUi.drawModalPanel(g, this.modalX, this.modalY, MODAL_W, MODAL_H);
-            g.text(this.font, "Remove Friend", this.modalX + 10, this.modalY + 11, BurrowUi.TEXT_PRIMARY, true);
+            Font font = BurrowUi.font();
+            g.text(font, "Remove Friend", this.modalX + 10, this.modalY + 11, BurrowUi.TEXT_PRIMARY, true);
             PlayerHeads.draw(g, this.friend.uuid(), this.friend.name(), this.modalX + 12, this.modalY + 35, 20);
-            g.text(this.font, "Remove " + this.friend.name() + "?",
+            g.text(font, "Remove " + this.friend.name() + "?",
                     this.modalX + 40, this.modalY + 41, BurrowUi.TEXT_SECONDARY, false);
         }
 
