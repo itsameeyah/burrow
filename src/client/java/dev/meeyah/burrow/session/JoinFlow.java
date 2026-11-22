@@ -163,6 +163,12 @@ public final class JoinFlow {
         }
     }
 
+    public static void beginByCode(String code) {
+        if (code != null && !code.isBlank() && BurrowClient.connection() != null) {
+            BurrowClient.connection().joinByCode(code);
+        }
+    }
+
     /** Join a friend's public saved Minecraft server directly (bypassing Burrow relay). */
     public static void joinExternalServer(String serverName, String serverIp) {
         if (serverIp == null || serverIp.isBlank()) {
@@ -187,7 +193,24 @@ public final class JoinFlow {
     }
 
     public static void onJoinReady(UUID hostUuid, String worldName, String roomId, String token, String relayPath) {
-        String hostName = lookupName(hostUuid);
+        onJoinReady(hostUuid, null, worldName, null, roomId, token, relayPath);
+    }
+
+    public static void onJoinReady(
+            UUID hostUuid,
+            @Nullable String explicitHostName,
+            String worldName,
+            @Nullable String explicitGameVersion,
+            String roomId,
+            String token,
+            String relayPath
+    ) {
+        String hostName = (explicitHostName != null && !explicitHostName.isBlank())
+                ? explicitHostName
+                : lookupName(hostUuid);
+        String hostGameVersion = (explicitGameVersion != null && !explicitGameVersion.isBlank())
+                ? explicitGameVersion
+                : lookupGameVersion(hostUuid);
         String url = HostSession.relayUrl(relayPath, roomId, token);
         Thread worker = new Thread(() -> {
             // The close handler only clears the active slot if this join is
@@ -222,6 +245,7 @@ public final class JoinFlow {
                         hostName == null ? "Friend's world" : hostName + " — " + worldName,
                         fakeAddress + ":" + 25565,
                         ServerData.Type.LAN);
+                dev.meeyah.burrow.compat.ViaFabricPlusCompat.applyTargetVersion(data, hostGameVersion);
                 ConnectScreen.startConnecting(mc.gui.screen(), mc, address, data, false, null);
             });
         }, "burrow-join");
@@ -243,6 +267,20 @@ public final class JoinFlow {
         for (FriendsState.WorldInvite inv : BurrowClient.friends().worldInvites()) {
             if (uuid.equals(inv.host())) {
                 return inv.hostName();
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable String lookupGameVersion(UUID uuid) {
+        for (FriendsState.Friend f : BurrowClient.friends().friends()) {
+            if (uuid.equals(f.uuid()) && f.gameVersion() != null && !f.gameVersion().isBlank()) {
+                return f.gameVersion();
+            }
+        }
+        for (FriendsState.DiscoverableWorld d : BurrowClient.friends().discoverableWorlds()) {
+            if (uuid.equals(d.host()) && d.gameVersion() != null && !d.gameVersion().isBlank()) {
+                return d.gameVersion();
             }
         }
         return null;

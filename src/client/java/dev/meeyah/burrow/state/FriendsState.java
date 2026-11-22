@@ -78,6 +78,10 @@ public final class FriendsState {
                     || "burrow".equals(activity);
         }
 
+        public boolean isDnd() {
+            return isOnline() && "dnd".equals(activity);
+        }
+
         public String activitySubtitle() {
             if (!isOnline()) {
                 return "Offline";
@@ -86,6 +90,9 @@ public final class FriendsState {
                 String world = (worldName == null || worldName.isBlank()) ? "a world" : worldName;
                 String count = maxPlayers > 0 ? " (" + playerCount + "/" + maxPlayers + ")" : "";
                 return "Hosting " + world + count + (locked ? " · Locked" : "");
+            }
+            if ("dnd".equals(activity)) {
+                return "Do Not Disturb";
             }
             if ("server".equals(activity) && serverIp != null && !serverIp.isBlank()) {
                 if (serverName != null && !serverName.isBlank() && !serverName.equalsIgnoreCase(serverIp)) {
@@ -206,6 +213,26 @@ public final class FriendsState {
         }
     }
 
+    public record CodePreview(
+            String code,
+            boolean found,
+            @org.jetbrains.annotations.Nullable UUID host,
+            String hostName,
+            String worldName,
+            String gameVersion,
+            int playerCount,
+            int maxPlayers,
+            boolean locked,
+            boolean isSelf,
+            String error
+    ) {
+        public boolean isVersionMismatch() {
+            return gameVersion != null
+                    && !gameVersion.isBlank()
+                    && !gameVersion.equals(BurrowClient.minecraftVersion());
+        }
+    }
+
     public interface Listener {
         void friendsChanged();
     }
@@ -223,6 +250,7 @@ public final class FriendsState {
     private volatile String lastError;
     private volatile long lastErrorAt;
     private volatile boolean initialSyncDone = false;
+    private volatile @org.jetbrains.annotations.Nullable CodePreview codePreview;
 
     public void addListener(Listener l) {
         listeners.add(l);
@@ -230,6 +258,26 @@ public final class FriendsState {
 
     public void removeListener(Listener l) {
         listeners.remove(l);
+    }
+
+    public void notifyChanged() {
+        fireChanged();
+    }
+
+    public @org.jetbrains.annotations.Nullable CodePreview codePreview() {
+        return codePreview;
+    }
+
+    public void setCodePreview(@org.jetbrains.annotations.Nullable CodePreview preview) {
+        this.codePreview = preview;
+        fireChanged();
+    }
+
+    public void clearCodePreview() {
+        if (this.codePreview != null) {
+            this.codePreview = null;
+            fireChanged();
+        }
     }
 
     public List<Friend> friends() {

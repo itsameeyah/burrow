@@ -67,13 +67,17 @@ public final class VoiceBridge {
     public static CompletableFuture<RelayTarget> requestVoiceRelay(UUID hostUuid) {
         CompletableFuture<RelayTarget> future = new CompletableFuture<>();
         BurrowConnection conn = BurrowClient.connection();
-        if (hostUuid == null || conn == null || !conn.voiceBegin(hostUuid)) {
+        if (hostUuid == null || conn == null) {
             future.completeExceptionally(new IllegalStateException("Not connected to Burrow signaling server"));
             return future;
         }
-        PENDING_CLIENT_REQUESTS
-                .computeIfAbsent(hostUuid, k -> new ConcurrentLinkedQueue<>())
-                .add(future);
+        Queue<CompletableFuture<RelayTarget>> q = PENDING_CLIENT_REQUESTS
+                .computeIfAbsent(hostUuid, k -> new ConcurrentLinkedQueue<>());
+        q.add(future);
+        if (!conn.voiceBegin(hostUuid)) {
+            q.remove(future);
+            future.completeExceptionally(new IllegalStateException("Not connected to Burrow signaling server"));
+        }
         return future;
     }
 
@@ -231,6 +235,7 @@ public final class VoiceBridge {
                 }
             };
             ws.setDaemon(true);
+            ws.setTcpNoDelay(true);
             this.webSocket = ws;
 
             if (!ws.connectBlocking(timeoutSeconds, TimeUnit.SECONDS)) {

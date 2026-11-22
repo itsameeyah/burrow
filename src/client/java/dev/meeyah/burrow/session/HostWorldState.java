@@ -32,8 +32,7 @@ public final class HostWorldState {
     public enum AccessMode {
         INVITE_ONLY("invite_only", "Invite Only"),
         FRIENDS("friends", "Friends Only"),
-        FRIENDS_OF_FRIENDS("friends_of_friends", "Friends of Friends"),
-        OPEN("open", "Friend Network");
+        FRIENDS_OF_FRIENDS("friends_of_friends", "Friends of Friends");
 
         private final String wire;
         private final String label;
@@ -48,6 +47,7 @@ public final class HostWorldState {
 
         public static AccessMode fromWire(@Nullable String s) {
             if (s == null) return FRIENDS;
+            if ("open".equals(s)) return FRIENDS_OF_FRIENDS;
             for (AccessMode m : values()) {
                 if (m.wire.equals(s)) return m;
             }
@@ -120,8 +120,11 @@ public final class HostWorldState {
                         ? "Invited by " + viaName
                         : "Joined via Invite";
             }
-            if ("open".equals(source)) {
-                return "Joined via Friend Network";
+            if ("code".equals(source)) {
+                return "Joined via Join Code";
+            }
+            if ("vanilla_code".equals(source)) {
+                return "Joined via IP Code";
             }
             return "Local LAN";
         }
@@ -134,7 +137,8 @@ public final class HostWorldState {
             if ("invite".equals(source)) {
                 return viaName != null && !viaName.isBlank() ? "Invited by " + viaName : "Invited";
             }
-            if ("open".equals(source)) return "Network";
+            if ("code".equals(source)) return "Code";
+            if ("vanilla_code".equals(source)) return "IP Code";
             return "LAN";
         }
     }

@@ -27,10 +27,13 @@ public final class Protocol {
     public static final String OP_SESSION_UPDATE = "session.update";
     public static final String OP_SESSION_CLOSE = "session.close";
     public static final String OP_SESSION_INVITE = "session.invite";
+    public static final String OP_SESSION_CODE = "session.code";
     public static final String OP_PRESENCE_UPDATE = "presence.update";
     public static final String OP_INVITE_REQUEST = "invite.request";
     public static final String OP_USERS_CHECK = "users.check";
     public static final String OP_JOIN_BEGIN = "join.begin";
+    public static final String OP_CODE_LOOKUP = "code.lookup";
+    public static final String OP_JOIN_CODE = "join.code";
 
     // Server -> client
     public static final String OP_AUTH_CHALLENGE = "auth.challenge";
@@ -38,8 +41,11 @@ public final class Protocol {
     public static final String OP_FRIENDS_SYNC = "friends.sync";
     public static final String OP_PRESENCE_BATCH = "presence.batch";
     public static final String OP_SESSION_STATE = "session.state";
+    public static final String OP_SESSION_CODE_STATE = "session.code.state";
+    public static final String OP_CODE_INFO = "code.info";
     public static final String OP_INVITE_RECEIVED = "invite.received";
     public static final String OP_INVITE_REQUESTED = "invite.requested";
+    public static final String OP_FRIEND_ACCEPTED = "friend.accepted";
     public static final String OP_USERS_CHECK_RESULT = "users.check.result";
     public static final String OP_JOIN_READY = "join.ready";
     public static final String OP_RELAY_HOST = "relay.host";
@@ -99,7 +105,8 @@ public final class Protocol {
             int maxPlayers,
             int playerCount,
             Collection<UUID> operators,
-            Collection<UUID> banned
+            Collection<UUID> banned,
+            Collection<UUID> players
     ) {
         JsonObject o = msg(op);
         o.addProperty("worldName", worldName);
@@ -116,6 +123,11 @@ public final class Protocol {
         JsonArray banArr = new JsonArray();
         for (UUID u : banned) banArr.add(u.toString());
         o.add("banned", banArr);
+        JsonArray playersArr = new JsonArray();
+        if (players != null) {
+            for (UUID u : players) playersArr.add(u.toString());
+        }
+        o.add("players", playersArr);
         return o;
     }
 
@@ -129,6 +141,27 @@ public final class Protocol {
         if (hostId != null) {
             o.addProperty("host", hostId.toString());
         }
+        return o;
+    }
+
+    /** Request generation, regeneration, or disabling of the host's 6-char join code. */
+    public static JsonObject sessionCode(String action) {
+        JsonObject o = msg(OP_SESSION_CODE);
+        o.addProperty("action", action);
+        return o;
+    }
+
+    /** Look up preview metadata for a 6-char join code. */
+    public static JsonObject codeLookup(String code) {
+        JsonObject o = msg(OP_CODE_LOOKUP);
+        o.addProperty("code", code == null ? "" : code);
+        return o;
+    }
+
+    /** Join a hosted world directly by its 6-char join code. */
+    public static JsonObject joinCode(String code) {
+        JsonObject o = msg(OP_JOIN_CODE);
+        o.addProperty("code", code == null ? "" : code);
         return o;
     }
 
