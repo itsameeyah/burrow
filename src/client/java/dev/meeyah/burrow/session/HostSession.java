@@ -18,13 +18,17 @@ import net.minecraft.server.network.EventLoopGroupHolder;
 import org.jetbrains.annotations.Nullable;
 
 import java.net.SocketAddress;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Host side of Burrow: shares the current singleplayer world with friends
- * (or invitees / friends-of-friends / open) and owns the per-world
+ * (or invitees / friends-of-friends / join-code guests) and owns the per-world
  * {@link HostWorldState} (access mode, lock, cap, roles, bans, join sources).
  */
 public final class HostSession {
@@ -37,12 +41,35 @@ public final class HostSession {
     private static volatile @Nullable MinecraftServer stateServer;
     private static volatile @Nullable HostWorldState currentState;
     private static volatile boolean hosting;
+    private static volatile @Nullable String joinCode;
     /** One tunnel per relay room (one per joining friend). */
     private static final Map<String, RelayTunnel> TUNNELS = new ConcurrentHashMap<>();
     /** Latest tunnel per joiner UUID so kick/ban can immediately sever their relay socket. */
     private static final Map<UUID, RelayTunnel> TUNNELS_BY_PLAYER = new ConcurrentHashMap<>();
+    private static final List<Runnable> LISTENERS = new CopyOnWriteArrayList<>();
 
     private HostSession() {}
+
+    public static void addListener(Runnable r) {
+        LISTENERS.add(r);
+    }
+
+    public static void removeListener(Runnable r) {
+        LISTENERS.remove(r);
+    }
+
+    private static void notifyListeners() {
+        List<Runnable> snapshot = List.copyOf(LISTENERS);
+        if (snapshot.isEmpty()) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null) {
+            mc.execute(() -> {
+                for (Runnable r : snapshot) r.run();
+            });
+        } else {
+            for (Runnable r : snapshot) r.run();
+        }
+    }
 
     /** Called by our ServerConnectionListener mixin whenever vanilla binds a server channel. */
     public static void rememberInitializer(ChannelHandler initializer) {
@@ -51,6 +78,49 @@ public final class HostSession {
 
     public static boolean isHosting() {
         return hosting;
+    }
+
+    public static @Nullable String joinCode() {
+        return hosting ? joinCode : null;
+    }
+
+    /** Vanilla Minecraft IP address for a 6-char join code, e.g. {@code ABC123.burrow.meeyah.dev}. */
+    public static String joinCodeAddress(String code) {
+        String host = "burrow.meeyah.dev";
+        try {
+            URI uri = URI.create(BurrowClient.relayBase());
+            if (uri.getHost() != null && !uri.getHost().isBlank()) {
+                host = uri.getHost();
+            }
+        } catch (Exception ignored) {
+        }
+        return code.toUpperCase() + "." + host;
+    }
+
+    public static void generateJoinCode() {
+        if (!hosting) return;
+        BurrowConnection conn = BurrowClient.connection();
+        if (conn != null) conn.sessionCode("generate");
+    }
+
+    public static void regenerateJoinCode() {
+        if (!hosting) return;
+        BurrowConnection conn = BurrowClient.connection();
+        if (conn != null) conn.sessionCode("regenerate");
+    }
+
+    public static void disableJoinCode() {
+        joinCode = null;
+        BurrowConnection conn = BurrowClient.connection();
+        if (hosting && conn != null) {
+            conn.sessionCode("disable");
+        }
+        notifyListeners();
+    }
+
+    public static void onJoinCodeState(@Nullable String code, boolean enabled) {
+        joinCode = (hosting && enabled && code != null && !code.isBlank()) ? code.trim().toUpperCase() : null;
+        notifyListeners();
     }
 
     /** Lazy-loaded per-world HostWorldState for the active integrated server. */
@@ -105,7 +175,9 @@ public final class HostSession {
         localEndpoint = localServer.localAddress();
 
         hosting = true;
-        sendSession(connection, server, state, true, Math.max(1, server.getPlayerCount()));
+        joinCode = null;
+        sendSession(connection, server, state, true, Math.max(1, server.getPlayerCount()), null);
+        notifyListeners();
     }
 
     /**
@@ -135,9 +207,11 @@ public final class HostSession {
     }
 
     public static synchronized void stop() {
+        joinCode = null;
         if (!hosting) {
             closeTunnels();
             closeLocalServer();
+            notifyListeners();
             return;
         }
         hosting = false;
@@ -153,6 +227,7 @@ public final class HostSession {
             connection.sessionClose();
         }
         ActivityTracker.refreshDiscord();
+        notifyListeners();
     }
 
     /** Push updated settings/lock/bans/roles/player count to the Burrow server if hosting. */
@@ -165,10 +240,14 @@ public final class HostSession {
         if (server == null) {
             return;
         }
-        syncStateWithCount(Math.max(1, server.getPlayerCount()));
+        syncStateWithCount(Math.max(1, server.getPlayerCount()), null);
     }
 
     public static synchronized void syncStateWithCount(int playerCount) {
+        syncStateWithCount(playerCount, null);
+    }
+
+    public static synchronized void syncStateWithCount(int playerCount, @Nullable UUID excludingPlayer) {
         if (!hosting) {
             return;
         }
@@ -179,7 +258,7 @@ public final class HostSession {
         if (server == null || connection == null || state == null) {
             return;
         }
-        sendSession(connection, server, state, false, Math.max(1, playerCount));
+        sendSession(connection, server, state, false, Math.max(1, playerCount), excludingPlayer);
     }
 
     /** Belt-and-braces cleanup when the singleplayer world itself goes away. */
@@ -187,6 +266,7 @@ public final class HostSession {
         if (hosting) {
             stop();
         } else {
+            joinCode = null;
             closeTunnels();
             closeLocalServer();
         }
@@ -199,6 +279,7 @@ public final class HostSession {
         capturedInitializer = null;
         stateServer = null;
         currentState = null;
+        joinCode = null;
     }
 
     /** After a signaling reconnect, re-announce an ongoing hosting session. */
@@ -211,14 +292,17 @@ public final class HostSession {
         BurrowConnection connection = BurrowClient.connection();
         if (server == null) {
             hosting = false;
+            joinCode = null;
             closeTunnels();
             closeLocalServer();
             return;
         }
+        joinCode = null;
         HostWorldState state = worldState(server);
         if (connection != null && state != null) {
-            sendSession(connection, server, state, true, Math.max(1, server.getPlayerCount()));
+            sendSession(connection, server, state, true, Math.max(1, server.getPlayerCount()), null);
         }
+        notifyListeners();
     }
 
     /** The Burrow server told us a player is joining — record join metadata and open a relay tunnel. */
@@ -277,27 +361,44 @@ public final class HostSession {
         VoiceBridge.closeHostTunnelForPlayer(uuid);
     }
 
+    private static List<UUID> collectOnlinePlayerUuids(IntegratedServer server, @Nullable UUID excludingPlayer) {
+        List<UUID> out = new ArrayList<>();
+        try {
+            for (var p : server.getPlayerList().getPlayers()) {
+                if (p == null) continue;
+                UUID u = p.getUUID();
+                if (u != null && !u.equals(excludingPlayer)) {
+                    out.add(u);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
     private static void sendSession(
             BurrowConnection connection,
             IntegratedServer server,
             HostWorldState state,
             boolean open,
-            int playerCount
+            int playerCount,
+            @Nullable UUID excludingPlayer
     ) {
         String worldName = safeWorldName(server);
         String gameVersion = BurrowClient.minecraftVersion();
+        List<UUID> players = collectOnlinePlayerUuids(server, excludingPlayer);
         if (open) {
             connection.sessionOpen(
                     worldName, gameVersion,
                     state.access().wire(), state.invitePerm().wire(),
                     state.locked(), state.maxPlayers(), playerCount,
-                    state.operatorUuids(), state.bannedUuids());
+                    state.operatorUuids(), state.bannedUuids(), players);
         } else {
             connection.sessionUpdate(
                     worldName, gameVersion,
                     state.access().wire(), state.invitePerm().wire(),
                     state.locked(), state.maxPlayers(), playerCount,
-                    state.operatorUuids(), state.bannedUuids());
+                    state.operatorUuids(), state.bannedUuids(), players);
         }
         ActivityTracker.refreshDiscord();
     }
