@@ -295,6 +295,7 @@ public final class BurrowVoicechatPlugin implements VoicechatPlugin {
                         }
                     };
                     ws.setDaemon(true);
+                    ws.setTcpNoDelay(true);
                     this.webSocket = ws;
                     if (!ws.connectBlocking(10, TimeUnit.SECONDS)) {
                         LOG.warn("Timed out connecting to Burrow voice relay for host {}", this.hostUuid);

@@ -172,6 +172,7 @@ public final class BurrowConnection {
             }
         };
         ws.setDaemon(true);
+        ws.setTcpNoDelay(true);
         this.client = ws;
         try {
             if (!ws.connectBlocking(10, TimeUnit.SECONDS)) {
@@ -295,6 +296,28 @@ public final class BurrowConnection {
             }
             case Protocol.OP_PRESENCE_BATCH -> state.applyPresence(parsePresence(array(msg, "updates")));
             case Protocol.OP_SESSION_STATE -> state.applySessions(parseSessions(array(msg, "sessions")));
+            case Protocol.OP_SESSION_CODE_STATE -> HostSession.onJoinCodeState(
+                    str(msg, "code"),
+                    bool(msg, "enabled"));
+            case Protocol.OP_CODE_INFO -> state.setCodePreview(new FriendsState.CodePreview(
+                    strOr(msg, "code", ""),
+                    bool(msg, "found"),
+                    uuid(msg, "host"),
+                    strOr(msg, "hostName", ""),
+                    strOr(msg, "worldName", ""),
+                    strOr(msg, "gameVersion", ""),
+                    intVal(msg, "playerCount"),
+                    intVal(msg, "maxPlayers"),
+                    bool(msg, "locked"),
+                    bool(msg, "isSelf"),
+                    strOr(msg, "error", "")));
+            case Protocol.OP_FRIEND_ACCEPTED -> {
+                UUID who = uuid(msg, "uuid");
+                String name = strOr(msg, "name", "");
+                if (!name.isBlank()) {
+                    BurrowToasts.showFriendAccepted(who, name);
+                }
+            }
             case Protocol.OP_INVITE_RECEIVED -> {
                 UUID host = uuid(msg, "host");
                 if (host != null) {
@@ -334,7 +357,9 @@ public final class BurrowConnection {
             }
             case Protocol.OP_JOIN_READY -> JoinFlow.onJoinReady(
                     uuid(msg, "host"),
+                    str(msg, "hostName"),
                     str(msg, "worldName"),
+                    str(msg, "gameVersion"),
                     str(msg, "roomId"),
                     str(msg, "token"),
                     str(msg, "relayPath"));
@@ -553,6 +578,18 @@ public final class BurrowConnection {
         send(Protocol.joinBegin(hostId));
     }
 
+    public void sessionCode(String action) {
+        send(Protocol.sessionCode(action));
+    }
+
+    public void codeLookup(String code) {
+        send(Protocol.codeLookup(code));
+    }
+
+    public void joinByCode(String code) {
+        send(Protocol.joinCode(code));
+    }
+
     public boolean voiceBegin(UUID hostId) {
         return send(Protocol.voiceBegin(hostId));
     }
@@ -566,13 +603,14 @@ public final class BurrowConnection {
             int maxPlayers,
             int playerCount,
             java.util.Collection<UUID> operators,
-            java.util.Collection<UUID> banned
+            java.util.Collection<UUID> banned,
+            java.util.Collection<UUID> players
     ) {
         send(Protocol.sessionPayload(
                 Protocol.OP_SESSION_OPEN,
                 worldName, gameVersion, "none",
                 access, invitePerm, locked, maxPlayers, playerCount,
-                operators, banned));
+                operators, banned, players));
     }
 
     public void sessionUpdate(
@@ -584,13 +622,14 @@ public final class BurrowConnection {
             int maxPlayers,
             int playerCount,
             java.util.Collection<UUID> operators,
-            java.util.Collection<UUID> banned
+            java.util.Collection<UUID> banned,
+            java.util.Collection<UUID> players
     ) {
         send(Protocol.sessionPayload(
                 Protocol.OP_SESSION_UPDATE,
                 worldName, gameVersion, "none",
                 access, invitePerm, locked, maxPlayers, playerCount,
-                operators, banned));
+                operators, banned, players));
     }
 
     public void sessionInvite(UUID targetId, @org.jetbrains.annotations.Nullable UUID hostId) {
