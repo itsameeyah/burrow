@@ -80,7 +80,7 @@ public final class HostPermissions {
                 state.clearJoinInfo(player.getUUID());
             }
             int remaining = Math.max(1, server.getPlayerCount() - 1);
-            HostSession.syncStateWithCount(remaining);
+            HostSession.syncStateWithCount(remaining, player.getUUID());
         });
 
         // Visitor enforcement: block breaking, placing, containers, entity interactions, attacking.

@@ -151,6 +151,7 @@ public final class RelayTunnel {
             }
         };
         ws.setDaemon(true);
+        ws.setTcpNoDelay(true);
         this.webSocket = ws;
         if (!ws.connectBlocking(timeoutSeconds, TimeUnit.SECONDS)) {
             shutdown();

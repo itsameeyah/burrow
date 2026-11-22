@@ -6,22 +6,29 @@ import dev.meeyah.burrow.discord.DiscordRpc;
 import dev.meeyah.burrow.net.BurrowConnection;
 import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.session.HostWorldState;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
 import net.minecraft.client.server.IntegratedServer;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Tracks what the local player is currently doing (menus, singleplayer,
- * Burrow friend world, saved server, Direct Connect, or local/LAN server)
- * and publishes privacy-respecting presence updates to Burrow and Discord RPC.
+ * Burrow friend world, saved server, Direct Connect, or local/LAN server),
+ * publishes privacy-respecting presence updates to Burrow and Discord RPC,
+ * and records recently met players (up to 50) across worlds and servers.
  *
  * Rules:
- * - Incognito ON: hides all server/world info (reports "Playing Multiplayer"
- *   to Burrow friends while in-game and clears Discord Rich Presence).
+ * - Do Not Disturb ON: reports "Do Not Disturb" to Burrow friends, clears
+ *   Discord Rich Presence, and mutes/hides incoming toast notifications.
  * - Saved Server List entry (non-local): reports custom server name + IP.
  * - Direct Connect (not in saved server list): reports "Playing Multiplayer"
  *   with no IP exposed.
@@ -31,6 +38,7 @@ public final class ActivityTracker {
     private static volatile boolean registered = false;
     private static volatile String lastSessionKey = "";
     private static volatile long sessionStartEpoch = DiscordRpc.nowEpochSeconds();
+    private static int recentCaptureTicks = 0;
 
     private ActivityTracker() {}
 
@@ -41,13 +49,101 @@ public final class ActivityTracker {
         registered = true;
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
-                client.execute(ActivityTracker::pushCurrent));
+                client.execute(() -> {
+                    pushCurrent();
+                    captureRecentPlayers(client);
+                }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
-                client.execute(ActivityTracker::pushIdle));
+                client.execute(() -> {
+                    captureRecentPlayers(client);
+                    pushIdle();
+                }));
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (++recentCaptureTicks >= 80) {
+                recentCaptureTicks = 0;
+                captureRecentPlayers(client);
+            }
+        });
+    }
+
+    /** Scan the current world/server tab list and persist real players into Recent 50. */
+    public static void captureRecentPlayers(Minecraft mc) {
+        if (mc == null) return;
+        BurrowConfig cfg = BurrowClient.config();
+        if (cfg == null) return;
+        ClientPacketListener conn = mc.getConnection();
+        if (conn == null) return;
+        UUID selfId = mc.player != null ? mc.player.getUUID() : BurrowClient.friends().selfUuid();
+        String source = describeCurrentLocation(mc);
+        long now = System.currentTimeMillis();
+
+        List<BurrowConfig.RecentPlayer> batch = new ArrayList<>();
+        try {
+            for (PlayerInfo info : conn.getOnlinePlayers()) {
+                if (info == null || info.getProfile() == null) continue;
+                UUID id = info.getProfile().id();
+                String name = info.getProfile().name();
+                if (id == null || name == null || id.equals(selfId)) continue;
+                // Skip fake server tab-list NPCs (version 2 UUIDs or invalid MC usernames).
+                int ver = id.version();
+                if (ver != 4 && ver != 3) continue;
+                if (!isValidMinecraftName(name)) continue;
+                batch.add(new BurrowConfig.RecentPlayer(id.toString(), name, source, now));
+            }
+        } catch (Throwable ignored) {
+            return;
+        }
+        if (!batch.isEmpty()) {
+            cfg.recordRecentPlayers(batch);
+        }
+    }
+
+    private static boolean isValidMinecraftName(String name) {
+        int len = name.length();
+        if (len < 3 || len > 16) return false;
+        for (int i = 0; i < len; i++) {
+            char c = name.charAt(i);
+            boolean ok = (c >= 'a' && c <= 'z')
+                    || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9')
+                    || c == '_';
+            if (!ok) return false;
+        }
+        return true;
+    }
+
+    private static String describeCurrentLocation(Minecraft mc) {
+        IntegratedServer sp = mc.getSingleplayerServer();
+        if (sp != null) {
+            return HostSession.safeWorldName(sp);
+        }
+        ServerData current = mc.getCurrentServer();
+        if (current == null) {
+            return "";
+        }
+        String ip = current.ip == null ? "" : current.ip.trim();
+        if (ip.endsWith(".burrow") || ip.contains(".burrow:")) {
+            return (current.name != null && !current.name.isBlank()) ? current.name.trim() : "Burrow World";
+        }
+        if (current.isLan() || isLocalOrPrivateHost(ip)) {
+            return "Local Server";
+        }
+        if (current.name != null && !current.name.isBlank()) {
+            return current.name.trim();
+        }
+        return ip.isBlank() ? "Multiplayer" : ip;
     }
 
     public static void pushIdle() {
         BurrowConnection conn = BurrowClient.connection();
+        BurrowConfig cfg = BurrowClient.config();
+        if (cfg != null && cfg.doNotDisturb) {
+            if (conn != null) {
+                conn.updatePresence("dnd", "", "", "");
+            }
+            DiscordRpc.clear();
+            return;
+        }
         if (conn != null) {
             conn.updatePresence("idle", "", "", "");
         }
@@ -55,10 +151,27 @@ public final class ActivityTracker {
     }
 
     public static void pushCurrent() {
+        syncState(true);
+    }
+
+    /** Re-sync Discord Rich Presence without re-sending Burrow signaling presence. */
+    public static void refreshDiscord() {
+        syncState(false);
+    }
+
+    private static void syncState(boolean sendBurrowPresence) {
         Minecraft mc = Minecraft.getInstance();
-        BurrowConnection conn = BurrowClient.connection();
+        BurrowConnection conn = sendBurrowPresence ? BurrowClient.connection() : null;
         BurrowConfig cfg = BurrowClient.config();
         if (mc == null || cfg == null) {
+            return;
+        }
+
+        if (cfg.doNotDisturb) {
+            if (conn != null) {
+                conn.updatePresence("dnd", "", "", "");
+            }
+            DiscordRpc.clear();
             return;
         }
 
@@ -71,14 +184,6 @@ public final class ActivityTracker {
                 conn.updatePresence("idle", "", "", "");
             }
             updateDiscord("idle", "In Menus", "Minecraft " + BurrowClient.minecraftVersion(), 0, 0);
-            return;
-        }
-
-        if (cfg.incognito) {
-            if (conn != null) {
-                conn.updatePresence("multiplayer", "", "", "");
-            }
-            DiscordRpc.clear();
             return;
         }
 
@@ -138,37 +243,9 @@ public final class ActivityTracker {
         updateDiscord("mp", "Playing Multiplayer", "Minecraft " + BurrowClient.minecraftVersion(), 0, 0);
     }
 
-    /** Re-sync Discord Rich Presence without re-sending Burrow signaling presence. */
-    public static void refreshDiscord() {
-        Minecraft mc = Minecraft.getInstance();
-        BurrowConfig cfg = BurrowClient.config();
-        if (mc == null || cfg == null) {
-            return;
-        }
-        if (cfg.incognito || !cfg.discordRichPresence) {
-            DiscordRpc.clear();
-            return;
-        }
-        IntegratedServer sp = mc.getSingleplayerServer();
-        if (sp != null) {
-            if (HostSession.isHosting()) {
-                HostWorldState ws = HostSession.worldState(sp);
-                String worldName = HostSession.safeWorldName(sp);
-                String accessLabel = ws != null ? ws.access().label() : "Friends Only";
-                String state = (ws != null && ws.locked()) ? accessLabel + " · Locked" : accessLabel;
-                int players = Math.max(1, sp.getPlayerCount());
-                int max = ws != null ? ws.maxPlayers() : 8;
-                updateDiscord("host:" + worldName, "Hosting " + worldName, state, players, max);
-            } else {
-                updateDiscord("sp:" + HostSession.safeWorldName(sp),
-                        "Playing Singleplayer", "Minecraft " + BurrowClient.minecraftVersion(), 0, 0);
-            }
-        }
-    }
-
     private static void updateDiscord(String sessionKey, String details, String state, int partySize, int partyMax) {
         BurrowConfig cfg = BurrowClient.config();
-        if (cfg != null && (cfg.incognito || !cfg.discordRichPresence)) {
+        if (cfg != null && (cfg.doNotDisturb || !cfg.discordRichPresence)) {
             DiscordRpc.clear();
             return;
         }
