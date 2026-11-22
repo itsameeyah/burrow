@@ -159,6 +159,36 @@ public final class BurrowToasts {
                 Component.literal(body)));
     }
 
+    public static void showUpdateAvailable(dev.meeyah.burrow.state.UpdateChecker.UpdateInfo info) {
+        if (info == null || !info.isAvailable()) {
+            return;
+        }
+        if (!info.isBreaking() && isDoNotDisturb()) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.gui == null) {
+            return;
+        }
+        long durationMs = info.isBreaking() ? 10_000L : 5_500L;
+        Component title = info.isBreaking()
+                ? Component.literal("Major Burrow Update — v" + info.latestVersion())
+                : Component.literal("Burrow Update Available");
+        Component body = info.isBreaking()
+                ? Component.literal("Breaking update! v" + info.currentVersion() + " may not work.")
+                : Component.literal("v" + info.latestVersion() + " is out (installed v" + info.currentVersion() + ")");
+        mc.execute(() -> {
+            if (info.isBreaking()) {
+                playNotificationChime(mc);
+            }
+            SystemToast.add(
+                    mc.gui.toastManager(),
+                    new SystemToast.SystemToastId(durationMs),
+                    title,
+                    body);
+        });
+    }
+
     /** True if a toast quick-action prompt is currently active on screen. */
     public static boolean hasActivePrompt() {
         ActivePrompt p = activePrompt;

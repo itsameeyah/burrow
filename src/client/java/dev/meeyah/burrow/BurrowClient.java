@@ -8,6 +8,7 @@ import dev.meeyah.burrow.session.HostPermissions;
 import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.state.ActivityTracker;
 import dev.meeyah.burrow.state.FriendsState;
+import dev.meeyah.burrow.state.UpdateChecker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -36,6 +37,7 @@ public class BurrowClient implements ClientModInitializer {
         ActivityTracker.register();
         DiscordRpc.start();
         ActivityTracker.pushIdle();
+        UpdateChecker.checkAsync();
 
         // Tear down hosting + stale server channel initializer whenever the
         // integrated server shuts down (world exit, quit to title, world switch).
@@ -62,6 +64,14 @@ public class BurrowClient implements ClientModInitializer {
 
     public static BurrowConnection connection() {
         return connection;
+    }
+
+    /** Installed Burrow mod version string from fabric.mod.json (e.g. "0.5.0"). */
+    public static String modVersion() {
+        return net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getModContainer(MOD_ID)
+                .map(c -> c.getMetadata().getVersion().getFriendlyString())
+                .orElse("0.5.0");
     }
 
     /** Minecraft version string reported to the Burrow server on session open. */

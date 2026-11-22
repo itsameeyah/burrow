@@ -53,6 +53,15 @@ public final class BurrowVanillaSprites {
     public static final SpriteSpec TAB_SELECTED_HOVER = spec("tab_selected_highlighted", "widget/tab_selected_highlighted", 130, 24, 2);
     public static final SpriteSpec BUTTON_IDLE = spec("button", "widget/button", 200, 20, 3);
     public static final SpriteSpec BUTTON_HOVER = spec("button_highlighted", "widget/button_highlighted", 200, 20, 3);
+    public static final SpriteSpec BUTTON_DISABLED = spec("button_disabled", "widget/button_disabled", 200, 20, 2);
+    public static final SpriteSpec SCROLLER = spec("scroller", "widget/scroller", 6, 32, 1);
+    public static final SpriteSpec SCROLLER_BG = spec("scroller_background", "widget/scroller_background", 6, 32, 1);
+    public static final SpriteSpec SLIDER = spec("slider", "widget/slider", 200, 20, 2);
+    public static final SpriteSpec SLIDER_HOVER = spec("slider_highlighted", "widget/slider_highlighted", 200, 20, 2);
+    public static final SpriteSpec SLIDER_HANDLE = spec("slider_handle", "widget/slider_handle", 8, 20, 2);
+    public static final SpriteSpec SLIDER_HANDLE_HOVER = spec("slider_handle_highlighted", "widget/slider_handle_highlighted", 8, 20, 2);
+    public static final SpriteSpec TEXT_FIELD = spec("text_field", "widget/text_field", 200, 20, 1);
+    public static final SpriteSpec TEXT_FIELD_HOVER = spec("text_field_highlighted", "widget/text_field_highlighted", 200, 20, 1);
 
     private static final Map<String, Boolean> VANILLA_LOADED = new HashMap<>();
     private static final Map<String, Boolean> CUSTOM_OVERRIDE_CACHE = new HashMap<>();

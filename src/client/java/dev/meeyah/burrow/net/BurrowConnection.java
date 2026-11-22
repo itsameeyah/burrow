@@ -11,6 +11,7 @@ import dev.meeyah.burrow.session.HostSession;
 import dev.meeyah.burrow.session.JoinFlow;
 import dev.meeyah.burrow.state.ActivityTracker;
 import dev.meeyah.burrow.state.FriendsState;
+import dev.meeyah.burrow.state.UpdateChecker;
 import dev.meeyah.burrow.ui.BurrowToasts;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
@@ -129,6 +130,7 @@ public final class BurrowConnection {
                     hello.addProperty("name", MojangAuth.username());
                     hello.addProperty("uuid", MojangAuth.profileIdString());
                 }
+                hello.addProperty("modVersion", BurrowClient.modVersion());
                 sendHandshake(this, hello);
             }
 
@@ -282,6 +284,10 @@ public final class BurrowConnection {
                 state.setSelf(self, name);
                 status = Status.CONNECTED;
                 LOG.info("connected to Burrow server as {}", name);
+                UpdateChecker.onServerVersionInfo(
+                        str(msg, "latestModVersion"),
+                        str(msg, "minModVersion"),
+                        str(msg, "downloadUrl"));
                 // If we were hosting before a reconnect, re-announce the
                 // session so friends still see the world as live.
                 HostSession.reannounce();
